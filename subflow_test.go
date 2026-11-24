@@ -408,7 +408,7 @@ func TestExpandSubflowsErrorLeavesWorkflowUnchanged(t *testing.T) {
 	edges := []nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "orphan", "x"),
 	}
-	w := nodestore.NewWorkflow("").SetID("test-subflow-no-mutation").SetNodes(append([]nodestore.NodeInterface(nil), nodebase...)).SetEdges(append([]nodestore.EdgeInterface(nil), edges...))
+	w := nodestore.NewWorkflow("").SetID("test-subflow-no-mutation").SetNodes(append([]nodestore.NodeInterface(nil), nodes...)).SetEdges(append([]nodestore.EdgeInterface(nil), edges...))
 
 	if err := ExpandSubflows(w); err == nil {
 		t.Fatalf("expansion of unknown definition succeeded; want error")
