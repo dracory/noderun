@@ -16,8 +16,8 @@ github.com/dracory/entitystore v1.24.0 h1:9xMoBRwuPH8prrCTfoucMXB6dYxuO7AOn22rjh
 github.com/dracory/entitystore v1.24.0/go.mod h1:/gd1Ar4ofrqROk21vMvEuM0I3uJsoLi54PSKICyhXxc=
 github.com/dracory/neat v0.61.0 h1:r4y5OPcaJY+iMdlw57CFta6BHToEoMT1pet5T1ccA0E=
 github.com/dracory/neat v0.61.0/go.mod h1:UXvxqury++bQeOxCYrhn3aecITIrz5G+Q6H6s890mTk=
-github.com/dracory/nodebase v0.2.0 h1:WZcYgtJVbV8o3p5YwxbimDCVMa+EBLi/2P6bDpbkGO8=
-github.com/dracory/nodebase v0.2.0/go.mod h1:+BP+TyiQUd3WqKigAXB3qE9ZhP8Ilbz5piGCecEF9zA=
+github.com/dracory/nodebase v0.2.1 h1:5BCL3P+WMGtYGmVAGyiDzWWrdzFxJ+58R98AMUcJ16k=
+github.com/dracory/nodebase v0.2.1/go.mod h1:+BP+TyiQUd3WqKigAXB3qE9ZhP8Ilbz5piGCecEF9zA=
 github.com/dracory/nodestore v0.2.0 h1:Sc2198+3fh0tYkPPb4x3jdYuuF5+88F9IXDs8Tj+/+o=
 github.com/dracory/nodestore v0.2.0/go.mod h1:3yFuD+AmqbrrbaZmUuJhsLf7aG4Lpy3yOQqMA23zpvE=
 github.com/dracory/uid v1.14.0 h1:lou3jIYobFNiu/Xn1zyD6Hzelnkz9OuQ0mCg2E+dA4Q=
