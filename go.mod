@@ -6,7 +6,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/dracory/entitystore v1.24.0
 	github.com/dracory/neat v0.61.0
-	github.com/dracory/nodebase v0.2.1
+	github.com/dracory/nodebase v0.3.0
 	github.com/dracory/nodestore v0.2.0
 	github.com/eclipse/paho.mqtt.golang v1.5.2
 	github.com/emersion/go-imap v1.2.1
