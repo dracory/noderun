@@ -94,7 +94,7 @@ func TestSubmitMultipartEmits(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	content := []byte("%PDF-1.4 fake job")
 	body, ct := multipartBody(t, "job.pdf", "application/pdf", content)
@@ -157,7 +157,7 @@ func TestSubmitRawBody(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	resp, err := http.Post(
 		fmt.Sprintf("http://127.0.0.1:%d/submit?filename=hello.txt", port),
@@ -205,7 +205,7 @@ func TestSubmitAuth(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/submit/x", port)
 
@@ -257,7 +257,7 @@ func TestSubmitOversize(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	body, ct := multipartBody(t, "big.bin", "application/octet-stream", []byte(strings.Repeat("x", 4096)))
 	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/submit/x", port), ct, body)
@@ -283,7 +283,7 @@ func TestSubmitOversizeRaw(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/submit", port),
 		"application/octet-stream", strings.NewReader("way more than eight bytes"))

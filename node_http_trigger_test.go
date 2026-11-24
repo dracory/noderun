@@ -47,7 +47,7 @@ func TestHTTPTriggerBodyLimit(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	big := strings.Repeat("x", maxTriggerBodyBytes+1024)
 	resp, err := http.Post(
@@ -105,7 +105,7 @@ func TestHTTPTriggerRouteParams(t *testing.T) {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(wf.ID) }()
-	time.Sleep(100 * time.Millisecond)
+	waitForListener(t, port, 5*time.Second)
 
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/user/42", port))
 	if err != nil {

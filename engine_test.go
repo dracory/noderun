@@ -26,6 +26,26 @@ func freePort(t *testing.T) int {
 	return port
 }
 
+// waitForListener polls until a TCP connection to port succeeds —
+// the trigger/submit listener binds asynchronously during activation,
+// so a fixed sleep after deploy races slow activations and flakes
+// under load. Dialing is the only readiness signal that matters here.
+func waitForListener(t *testing.T, port int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		if err == nil {
+			_ = c.Close()
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("listener on :%d not accepting within %v", port, timeout)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // TestHTTPTriggerFlow verifies the deploy → request → inject → httpResponse
 // cycle: a real HTTP request to the trigger's listener must be answered by
 // the flow's httpResponse node, not by the trigger itself.
