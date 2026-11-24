@@ -208,11 +208,11 @@ func TestFunctionSpec(t *testing.T) {
 		})
 
 		s.it("should handle setTimeout()", func(t *testing.T) {
-			t.Skip("reason: setTimeout/setInterval not exposed in the goja sandbox")
+			skipf(t, "setTimeout/setInterval not exposed in the goja sandbox")
 		})
 
 		s.it("should use the same Date object from outside the sandbox", func(t *testing.T) {
-			t.Skip("reason: not applicable — goja runtime, not node vm sandbox sharing")
+			skipf(t, "not applicable — goja runtime, not node vm sandbox sharing")
 		})
 	})
 }

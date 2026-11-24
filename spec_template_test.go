@@ -2,8 +2,8 @@ package noderunner_test
 
 import (
 	"context"
-	nodestore "github.com/dracory/nodestore"
 	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )
@@ -28,99 +28,99 @@ func TestTemplateSpec(t *testing.T) {
 		}
 
 		s.it("should modify payload using node-configured template", func(t *testing.T) {
-			t.Skip("reason: upstream templates are Mustache; GoFlow renders Go text/template")
+			skipf(t, "upstream templates are Mustache; GoFlow renders Go text/template")
 		})
 
 		s.it("should modify the configured property using msg.template", func(t *testing.T) {
-			t.Skip("reason: msg.template override and arbitrary field targets not implemented (Mustache)")
+			skipf(t, "msg.template override and arbitrary field targets not implemented (Mustache)")
 		})
 
 		s.it("should be able to overwrite msg.template using the template from msg.template", func(t *testing.T) {
-			t.Skip("reason: msg.template override not implemented (Mustache)")
+			skipf(t, "msg.template override not implemented (Mustache)")
 		})
 
 		s.it("should modify payload from msg.template", func(t *testing.T) {
-			t.Skip("reason: msg.template override not implemented (Mustache)")
+			skipf(t, "msg.template override not implemented (Mustache)")
 		})
 
 		s.it("should modify payload from env variable", func(t *testing.T) {
-			t.Skip("reason: {{env.X}} Mustache context tags not supported")
+			skipf(t, "{{env.X}} Mustache context tags not supported")
 		})
 
 		s.it("should modify payload from flow context", func(t *testing.T) {
-			t.Skip("reason: {{flow.X}} Mustache context tags not supported")
+			skipf(t, "{{flow.X}} Mustache context tags not supported")
 		})
 
 		s.it("should modify payload from persistable flow context", func(t *testing.T) {
-			t.Skip("reason: persistable (named) context stores not supported")
+			skipf(t, "persistable (named) context stores not supported")
 		})
 
 		s.it("should handle nested context tags - property not set", func(t *testing.T) {
-			t.Skip("reason: Mustache context tags not supported")
+			skipf(t, "Mustache context tags not supported")
 		})
 
 		s.it("should handle nested context tags - property set", func(t *testing.T) {
-			t.Skip("reason: Mustache context tags not supported")
+			skipf(t, "Mustache context tags not supported")
 		})
 
 		s.it("should modify payload from two persistable flow context", func(t *testing.T) {
-			t.Skip("reason: persistable (named) context stores not supported")
+			skipf(t, "persistable (named) context stores not supported")
 		})
 
 		s.it("should modify payload from global context", func(t *testing.T) {
-			t.Skip("reason: {{global.X}} Mustache context tags not supported")
+			skipf(t, "{{global.X}} Mustache context tags not supported")
 		})
 
 		s.it("should modify payload from persistable global context", func(t *testing.T) {
-			t.Skip("reason: persistable (named) context stores not supported")
+			skipf(t, "persistable (named) context stores not supported")
 		})
 
 		s.it("should modify payload from two persistable global context", func(t *testing.T) {
-			t.Skip("reason: persistable (named) context stores not supported")
+			skipf(t, "persistable (named) context stores not supported")
 		})
 
 		s.it("should modify payload from persistable flow & global context", func(t *testing.T) {
-			t.Skip("reason: persistable (named) context stores not supported")
+			skipf(t, "persistable (named) context stores not supported")
 		})
 
 		s.it("should handle missing node context", func(t *testing.T) {
-			t.Skip("reason: Mustache context tags not supported")
+			skipf(t, "Mustache context tags not supported")
 		})
 
 		s.it("should handle escape characters in Mustache format and JSON output mode", func(t *testing.T) {
-			t.Skip("reason: Mustache rendering not supported (Go text/template)")
+			skipf(t, "Mustache rendering not supported (Go text/template)")
 		})
 
 		s.it("should modify payload in plain text mode", func(t *testing.T) {
-			t.Skip("reason: syntax=plain literal passthrough not implemented")
+			skipf(t, "syntax=plain literal passthrough not implemented")
 		})
 
 		s.it("should modify flow context", func(t *testing.T) {
-			t.Skip("reason: fieldType=flow (render into context) not implemented")
+			skipf(t, "fieldType=flow (render into context) not implemented")
 		})
 
 		s.it("should modify persistable flow context", func(t *testing.T) {
-			t.Skip("reason: fieldType=flow + persistable context not implemented")
+			skipf(t, "fieldType=flow + persistable context not implemented")
 		})
 
 		s.it("should modify global context", func(t *testing.T) {
-			t.Skip("reason: fieldType=global (render into context) not implemented")
+			skipf(t, "fieldType=global (render into context) not implemented")
 		})
 
 		s.it("should modify persistable global context", func(t *testing.T) {
-			t.Skip("reason: fieldType=global + persistable context not implemented")
+			skipf(t, "fieldType=global + persistable context not implemented")
 		})
 
 		s.it("should handle if the field isn't set", func(t *testing.T) {
-			t.Skip("reason: Mustache rendering not supported (Go text/template)")
+			skipf(t, "Mustache rendering not supported (Go text/template)")
 		})
 
 		s.it("should handle deeper objects", func(t *testing.T) {
-			t.Skip("reason: Mustache rendering + dotted field targets not supported")
+			skipf(t, "Mustache rendering + dotted field targets not supported")
 		})
 
 		s.it("should handle block contexts objects", func(t *testing.T) {
-			t.Skip("reason: Mustache block sections not supported (Go text/template)")
+			skipf(t, "Mustache block sections not supported (Go text/template)")
 		})
 
 		s.it("should raise error if passed bad template", func(t *testing.T) {

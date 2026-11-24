@@ -28,8 +28,9 @@ package noderunner_test
 import (
 	"context"
 	"encoding/json"
-	nodestore "github.com/dracory/nodestore"
+	"fmt"
 	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"reflect"
 	"regexp"
 	"strings"
@@ -57,6 +58,28 @@ func record(e registryEntry) {
 	registryMu.Lock()
 	registry = append(registry, e)
 	registryMu.Unlock()
+}
+
+// skipReasons carries a subtest's skip-with-reason text from skipf
+// (which calls t.Skip — the testing package does not expose the skip
+// message afterwards) to the registry recorder keyed by *testing.T.
+var (
+	skipReasonsMu sync.Mutex
+	skipReasons   = map[*testing.T]string{}
+)
+
+// skipf marks the subtest as a deliberate non-goal: it records the
+// formatted reason so the manifest entry shows WHY, then calls
+// t.Skip("reason: ...") so `go test` output stays greppable.
+// Subtests are sequential within a suite, so the *testing.T key is
+// unambiguous.
+func skipf(t *testing.T, format string, args ...interface{}) {
+	t.Helper()
+	reason := fmt.Sprintf(format, args...)
+	skipReasonsMu.Lock()
+	skipReasons[t] = reason
+	skipReasonsMu.Unlock()
+	t.Skip("reason: " + reason)
 }
 
 var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
@@ -89,17 +112,23 @@ func describe(t *testing.T, file, title string, fn func(s *suite)) {
 
 // it registers one ported assertion. title MUST be the verbatim
 // upstream it() string — it is the join key for the coverage diff.
-// A deliberate non-goal is expressed as t.Skip("reason: ...") inside
-// fn; the subtest still registers its title (status "skipped") so the
-// diff counts the scoping decision.
+// A deliberate non-goal is expressed as skipf(t, "...") inside fn
+// (which calls t.Skip("reason: ...")); the subtest still registers
+// its title (status "skipped") plus the named reason so the diff
+// counts the scoping decision and the report shows the rationale.
 func (s *suite) it(title string, fn func(t *testing.T)) {
 	s.t.Helper()
 	s.t.Run(sanitizeName(title), func(t *testing.T) {
 		defer func() {
 			status := "covered"
+			var reason string
 			switch {
 			case t.Skipped():
 				status = "skipped"
+				skipReasonsMu.Lock()
+				reason = skipReasons[t]
+				delete(skipReasons, t)
+				skipReasonsMu.Unlock()
 			case t.Failed():
 				status = "failed"
 			}
@@ -108,6 +137,7 @@ func (s *suite) it(title string, fn func(t *testing.T)) {
 				Describe: s.describe,
 				Title:    title,
 				Status:   status,
+				Reason:   reason,
 			})
 		}()
 		fn(t)

@@ -2,8 +2,8 @@ package noderunner_test
 
 import (
 	"context"
-	nodestore "github.com/dracory/nodestore"
 	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )
@@ -254,7 +254,7 @@ func TestRBESpec(t *testing.T) {
 		})
 
 		s.it("should only send output if more than x away from original value (deadband)", func(t *testing.T) {
-			t.Skip("reason: upstream parseFloat parses \"6 deg\"→6; GoFlow reports non-numeric")
+			skipf(t, "upstream parseFloat parses \"6 deg\"→6; GoFlow reports non-numeric")
 		})
 
 		s.it("should accept a numeric gap (deadband)", func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestRBESpec(t *testing.T) {
 		})
 
 		s.it("should not send output if more than x away from original value (narrowband)", func(t *testing.T) {
-			t.Skip("reason: upstream parseFloat parses \"6 deg\"→6; GoFlow reports non-numeric")
+			skipf(t, "upstream parseFloat parses \"6 deg\"→6; GoFlow reports non-numeric")
 		})
 
 		s.it("should send output if gap is 0 and input doesnt change (narrowband)", func(t *testing.T) {
@@ -311,7 +311,7 @@ func TestRBESpec(t *testing.T) {
 		})
 
 		s.it("should not send output if more than x away from original value (narrowband in step mode)", func(t *testing.T) {
-			t.Skip("reason: inout=\"in\" step mode (compare vs last received value) not implemented")
+			skipf(t, "inout=\"in\" step mode (compare vs last received value) not implemented")
 		})
 	})
 }

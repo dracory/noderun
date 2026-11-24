@@ -192,7 +192,7 @@ func TestRangeSpec(t *testing.T) {
 			// GoFlow cannot distinguish a null payload from an absent
 			// one — nil Data takes the missing-property passthrough path
 			// instead of upstream's report-and-drop.
-			t.Skip("reason: nil Data is treated as payload-not-present (passthrough), not null")
+			skipf(t, "nil Data is treated as payload-not-present (passthrough), not null")
 		})
 
 		s.it("still scales true as 1 (existing flows rely on it)", func(t *testing.T) {

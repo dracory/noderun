@@ -144,16 +144,16 @@ func TestInjectSpec(t *testing.T) {
 		})
 
 		s.it("should inject with cron", func(t *testing.T) {
-			t.Skip("reason: cron schedules not implemented (repeat is interval-only)")
+			skipf(t, "cron schedules not implemented (repeat is interval-only)")
 		})
 
 		s.it("should report invalid JSONata expression", func(t *testing.T) {
-			t.Skip("reason: JSONata expressions not supported")
+			skipf(t, "JSONata expressions not supported")
 		})
 
 		// upstream title has a trailing space — verbatim.
 		s.it("inject name of node as environment variable by substitution ", func(t *testing.T) {
-			t.Skip("reason: $(VAR) env substitution in config not implemented")
+			skipf(t, "$(VAR) env substitution in config not implemented")
 		})
 	})
 }

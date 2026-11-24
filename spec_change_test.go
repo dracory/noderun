@@ -1,8 +1,8 @@
 package noderunner_test
 
 import (
-	nodestore "github.com/dracory/nodestore"
 	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )
@@ -106,16 +106,16 @@ func TestChangeSpec(t *testing.T) {
 		// upstream #change describe: search/replace — our change node
 		// has no change op.
 		s.it("changes the value of the message property", func(t *testing.T) {
-			t.Skip("reason: change (find/replace) op not implemented")
+			skipf(t, "change (find/replace) op not implemented")
 		})
 
 		// upstream env var describe.
 		s.it("sets the value using env property", func(t *testing.T) {
-			t.Skip("reason: env value source not implemented in change rules")
+			skipf(t, "env value source not implemented in change rules")
 		})
 
 		s.it("changes the value using jsonata", func(t *testing.T) {
-			t.Skip("reason: JSONata expressions not supported")
+			skipf(t, "JSONata expressions not supported")
 		})
 	})
 }

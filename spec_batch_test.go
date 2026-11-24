@@ -40,91 +40,91 @@ func TestBatchSpec(t *testing.T) {
 		// All count-mode titles assert a re-emitted parts SEQUENCE;
 		// GoFlow emits one array message instead.
 		s.it("should create seq. with count", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should create seq. with count (more sent than count)", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should create seq. with count and terminate early if parts honoured", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should create seq. with count and overlap", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should handle too many pending messages", func(t *testing.T) {
-			t.Skip("reason: nodeMessageBufferMaxLength pending-buffer cap not implemented")
+			skipf(t, "nodeMessageBufferMaxLength pending-buffer cap not implemented")
 		})
 		s.it("should handle reset", func(t *testing.T) {
-			t.Skip("reason: msg.reset buffer flush not implemented in batch node")
+			skipf(t, "msg.reset buffer flush not implemented in batch node")
 		})
 
 		// --- describe('mode: interval') --------------------------------
 		s.it("should create seq. with interval", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should create seq. with interval (in float)", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should create seq. with interval & not send empty seq", func(t *testing.T) {
-			t.Skip("reason: GoFlow batch emits a single array message, not a parts sequence")
+			skipf(t, "GoFlow batch emits a single array message, not a parts sequence")
 		})
 		s.it("should create seq. with interval & send empty seq", func(t *testing.T) {
-			t.Skip("reason: upstream emits an empty sequence marker; GoFlow emits a single array message")
+			skipf(t, "upstream emits an empty sequence marker; GoFlow emits a single array message")
 		})
 		s.it("should handle too many pending messages", func(t *testing.T) {
-			t.Skip("reason: nodeMessageBufferMaxLength pending-buffer cap not implemented")
+			skipf(t, "nodeMessageBufferMaxLength pending-buffer cap not implemented")
 		})
 		s.it("should handle reset", func(t *testing.T) {
-			t.Skip("reason: msg.reset buffer flush not implemented in batch node")
+			skipf(t, "msg.reset buffer flush not implemented in batch node")
 		})
 
 		// --- describe('mode: concat') ----------------------------------
 		s.it("should concat two seq. (series)", func(t *testing.T) {
-			t.Skip("reason: upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
+			skipf(t, "upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
 		})
 		s.it("should concat two seq. (mixed)", func(t *testing.T) {
-			t.Skip("reason: upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
+			skipf(t, "upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
 		})
 		s.it("should concat three seq.", func(t *testing.T) {
-			t.Skip("reason: upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
+			skipf(t, "upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
 		})
 		s.it("should concat same seq.", func(t *testing.T) {
-			t.Skip("reason: upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
+			skipf(t, "upstream concat emits one message per input seq element; GoFlow emits a single flattened array message")
 		})
 		s.it("should handle too many pending messages", func(t *testing.T) {
-			t.Skip("reason: nodeMessageBufferMaxLength pending-buffer cap not implemented")
+			skipf(t, "nodeMessageBufferMaxLength pending-buffer cap not implemented")
 		})
 		s.it("should handle reset", func(t *testing.T) {
-			t.Skip("reason: msg.reset buffer flush not implemented in batch node")
+			skipf(t, "msg.reset buffer flush not implemented in batch node")
 		})
 
 		// --- describe('messaging API') ---------------------------------
 		s.it("should call done() when message is sent (mode: count)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() when reset (mode: count)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() regardless of buffer overflow (mode: count)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() when message is sent (mode: interval)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() when reset (mode: interval)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() regardless of buffer overflow (mode: interval)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() when message is sent (mode: concat)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() when reset (mode: concat)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() regardless of buffer overflow (mode: concat)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 	})
 }

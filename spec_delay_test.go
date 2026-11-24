@@ -43,23 +43,23 @@ func TestDelaySpec(t *testing.T) {
 		})
 
 		s.it("delays the message in seconds", func(t *testing.T) {
-			t.Skip("reason: delay node only supports millisecond duration")
+			skipf(t, "delay node only supports millisecond duration")
 		})
 
 		s.it("delays the message in minutes", func(t *testing.T) {
-			t.Skip("reason: delay node only supports millisecond duration")
+			skipf(t, "delay node only supports millisecond duration")
 		})
 
 		s.it("variable delay set by msg.delay the message in milliseconds", func(t *testing.T) {
-			t.Skip("reason: per-message msg.delay not implemented")
+			skipf(t, "per-message msg.delay not implemented")
 		})
 
 		s.it("limits the message rate to 1 per second", func(t *testing.T) {
-			t.Skip("reason: rate limiting not implemented")
+			skipf(t, "rate limiting not implemented")
 		})
 
 		s.it("can flush delay queue", func(t *testing.T) {
-			t.Skip("reason: delay queue + flush/reset control messages not implemented")
+			skipf(t, "delay queue + flush/reset control messages not implemented")
 		})
 	})
 }

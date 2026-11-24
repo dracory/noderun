@@ -135,11 +135,11 @@ func TestSwitchSpec(t *testing.T) {
 		})
 
 		s.it("should handle JSONata expression", func(t *testing.T) {
-			t.Skip("reason: JSONata expressions not supported")
+			skipf(t, "JSONata expressions not supported")
 		})
 
 		s.it("should handle env var expression", func(t *testing.T) {
-			t.Skip("reason: env var rule operands not implemented")
+			skipf(t, "env var rule operands not implemented")
 		})
 	})
 }

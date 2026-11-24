@@ -166,7 +166,7 @@ func TestSortSpec(t *testing.T) {
 			elemSort(t, "ascending", false, inStrings, []interface{}{"1000", "200", "30", "4"})
 		})
 		s.it("should sort msg prop (elem, not number, ascending)", func(t *testing.T) {
-			t.Skip("reason: sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
+			skipf(t, "sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
 		})
 		s.it("should sort message group/payload (not number, ascending)", func(t *testing.T) {
 			checkSeq(t, "ascending", false, "payload", "payload", inStrings, []interface{}{"1000", "200", "30", "4"})
@@ -179,7 +179,7 @@ func TestSortSpec(t *testing.T) {
 			elemSort(t, "descending", false, inStrings, []interface{}{"4", "30", "200", "1000"})
 		})
 		s.it("should sort msg prop (elem, not number, descending)", func(t *testing.T) {
-			t.Skip("reason: sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
+			skipf(t, "sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
 		})
 		s.it("should sort message group/payload (not number, descending)", func(t *testing.T) {
 			checkSeq(t, "descending", false, "payload", "payload", inStrings, []interface{}{"4", "30", "200", "1000"})
@@ -192,7 +192,7 @@ func TestSortSpec(t *testing.T) {
 			elemSort(t, "ascending", true, inStrings, []interface{}{"4", "30", "200", "1000"})
 		})
 		s.it("should sort msg prop (elem, number, ascending)", func(t *testing.T) {
-			t.Skip("reason: sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
+			skipf(t, "sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
 		})
 		s.it("should sort message group/payload (number, ascending)", func(t *testing.T) {
 			checkSeq(t, "ascending", true, "payload", "payload", inStrings, []interface{}{"4", "30", "200", "1000"})
@@ -205,7 +205,7 @@ func TestSortSpec(t *testing.T) {
 			elemSort(t, "descending", true, inStrings, []interface{}{"1000", "200", "30", "4"})
 		})
 		s.it("should sort msg prop (elem, number, descending)", func(t *testing.T) {
-			t.Skip("reason: sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
+			skipf(t, "sorting an arbitrary msg property (target=msg prop) is not supported — only payload")
 		})
 		s.it("should sort message group/payload (number, descending)", func(t *testing.T) {
 			checkSeq(t, "descending", true, "payload", "payload", inStrings, []interface{}{"1000", "200", "30", "4"})
@@ -215,58 +215,58 @@ func TestSortSpec(t *testing.T) {
 		})
 
 		s.it("should sort payload (exp, not number, ascending)", func(t *testing.T) {
-			t.Skip("reason: JSONata sort expressions not supported")
+			skipf(t, "JSONata sort expressions not supported")
 		})
 		s.it("should sort message group (exp, not number, ascending)", func(t *testing.T) {
-			t.Skip("reason: JSONata sort expressions not supported")
+			skipf(t, "JSONata sort expressions not supported")
 		})
 		s.it("should sort message group (exp, not number, descending)", func(t *testing.T) {
-			t.Skip("reason: JSONata sort expressions not supported")
+			skipf(t, "JSONata sort expressions not supported")
 		})
 		s.it("should sort payload (exp, not number, descending)", func(t *testing.T) {
-			t.Skip("reason: JSONata sort expressions not supported")
+			skipf(t, "JSONata sort expressions not supported")
 		})
 
 		s.it("should sort payload of objects", func(t *testing.T) {
-			t.Skip("reason: sorting object arrays by a JSONata key expression not supported")
+			skipf(t, "sorting object arrays by a JSONata key expression not supported")
 		})
 
 		s.it("should sort payload by context (exp, not number, ascending)", func(t *testing.T) {
-			t.Skip("reason: JSONata + flow context expressions not supported")
+			skipf(t, "JSONata + flow context expressions not supported")
 		})
 		s.it("should sort message group by context (exp, not number, ascending)", func(t *testing.T) {
-			t.Skip("reason: JSONata + flow context expressions not supported")
+			skipf(t, "JSONata + flow context expressions not supported")
 		})
 		s.it("should sort payload by persistable context (exp, not number, descending)", func(t *testing.T) {
-			t.Skip("reason: JSONata + persistable context not supported")
+			skipf(t, "JSONata + persistable context not supported")
 		})
 		s.it("should sort message group by persistable context (exp, not number, descending)", func(t *testing.T) {
-			t.Skip("reason: JSONata + persistable context not supported")
+			skipf(t, "JSONata + persistable context not supported")
 		})
 
 		s.it("should handle JSONata script error", func(t *testing.T) {
-			t.Skip("reason: JSONata expressions not supported")
+			skipf(t, "JSONata expressions not supported")
 		})
 
 		s.it("should handle too many pending messages", func(t *testing.T) {
-			t.Skip("reason: nodeMessageBufferMaxLength pending-buffer cap not implemented")
+			skipf(t, "nodeMessageBufferMaxLength pending-buffer cap not implemented")
 		})
 
 		s.it("should clear pending messages on close", func(t *testing.T) {
-			t.Skip("reason: no on-close pending-buffer notification equivalent")
+			skipf(t, "no on-close pending-buffer notification equivalent")
 		})
 
 		s.it("should call done() when message is sent (payload)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() when message is sent (sequence)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() regardless of buffer overflow (same group)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 		s.it("should call done() regardless of buffer overflow (different group)", func(t *testing.T) {
-			t.Skip("reason: Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
 		})
 	})
 }
