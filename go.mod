@@ -7,7 +7,7 @@ require (
 	github.com/dracory/entitystore v1.24.0
 	github.com/dracory/neat v0.61.0
 	github.com/dracory/nodebase v0.0.0
-	github.com/dracory/nodestore v0.0.0
+	github.com/dracory/nodestore v0.2.0
 	github.com/eclipse/paho.mqtt.golang v1.5.2
 	github.com/emersion/go-imap v1.2.1
 	modernc.org/sqlite v1.63.0
@@ -50,5 +50,3 @@ require (
 )
 
 replace github.com/dracory/nodebase => ../nodebase
-
-replace github.com/dracory/nodestore => ../nodestore
