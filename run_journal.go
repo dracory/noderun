@@ -3,6 +3,8 @@ package noderunner
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+
 	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
 	"time"
@@ -49,7 +51,7 @@ func (e *WorkflowEngine) recordRun(workflowID string, node nodestore.NodeInterfa
 		Input:      summarizeJournalPayload(node.GetType(), in),
 	}
 	if runErr != nil {
-		entry.Error = runErr.Error()
+		entry.Error = maskURICredentials(runErr.Error())
 	} else {
 		entry.Output = summarizeJournalPayload(node.GetType(), out)
 	}
@@ -84,6 +86,18 @@ func (e *WorkflowEngine) RunJournal(workflowID, nodeID string) ([]nodebase.RunJo
 	out := make([]nodebase.RunJournalEntry, len(entries))
 	copy(out, entries)
 	return out, true
+}
+
+// uriCredPattern matches credentials embedded in URIs
+// (scheme://user:pass@host) — executor error strings can echo them
+// (dial errors, DSNs), so event/journal/problem text is masked before
+// it reaches durable or admin-readable surfaces.
+var uriCredPattern = regexp.MustCompile(`(://[^:/@\s]+:)[^@\s]+(@)`)
+
+// maskURICredentials replaces the password component of embedded URI
+// credentials with the journal mask; safe on any string.
+func maskURICredentials(s string) string {
+	return uriCredPattern.ReplaceAllString(s, "${1}"+JournalMasked+"${2}")
 }
 
 // summarizeJournalPayload builds a bounded, credential-safe JSON-able

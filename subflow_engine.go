@@ -65,14 +65,25 @@ type subflowInstance struct {
 // nodestore.IsSubflowInstance reports whether nodeType names a subflow instance
 // ("subflow:<defId>").
 
+// maxExpandedNodes bounds the total node count subflow expansion may
+// produce (shared budget across all nesting levels). Depth is capped
+// at maxSubflowDepth, but nothing bounds the product — K nested
+// instances per level multiply to K^depth copies, so a crafted flow
+// could exhaust memory at deploy. The counter is decremented as each
+// instance's inner graph is produced, so the runaway is caught while
+// expanding, not after.
+const maxExpandedNodes = 100000
+
 // ExpandSubflows rewrites w in place: every "subflow:<defId>" instance
 // node is replaced by a namespaced copy of its definition's internal
 // graph and the definition nodes themselves are removed (they are
 // templates, not executable nodes). Definitions are parsed from nodes
-// of type "subflow" living in the same workflow. Returns a descriptive
-// error for unknown definitions, out-of-range ports and recursive
-// nesting.
-func ExpandSubflows(w nodestore.WorkflowInterface) error {
+// of type "subflow" living in the same workflow. allowOSEnv permits
+// "env"-typed env vars to read the process environment (see
+// WorkflowEngine.AllowOSEnv). Returns a descriptive error for unknown
+// definitions, out-of-range ports, recursive nesting and expansion
+// beyond maxExpandedNodes.
+func ExpandSubflows(w nodestore.WorkflowInterface, allowOSEnv bool) error {
 	defs := map[string]*subflowDef{}
 	var rest []nodestore.NodeInterface
 	for _, n := range w.GetNodes() {
@@ -91,7 +102,8 @@ func ExpandSubflows(w nodestore.WorkflowInterface) error {
 	// no len(defs) shortcut: an orphaned "subflow:<id>" instance must
 	// still fail here with the clear "definition not found" error
 	// instead of dying later as an unknown node type.
-	expandedNodes, edges, _, err := expandSubflowInstances(rest, w.GetEdges(), defs, nil, nil)
+	budget := maxExpandedNodes
+	expandedNodes, edges, _, err := expandSubflowInstances(rest, w.GetEdges(), defs, nil, nil, allowOSEnv, &budget)
 	if err != nil {
 		return err
 	}
@@ -155,7 +167,7 @@ func parseSubflowDef(n nodestore.NodeInterface) (*subflowDef, error) {
 // (env inheritance). The returned map is keyed by instance node id
 // and carries each instance's port endpoint lists — the caller needs
 // them to resolve ports pointing at a (now vanished) instance node.
-func expandSubflowInstances(srcNodes []nodestore.NodeInterface, edges []nodestore.EdgeInterface, defs map[string]*subflowDef, parentEnv map[string]interface{}, ancestry []string) ([]nodestore.NodeInterface, []nodestore.EdgeInterface, map[string]*subflowInstance, error) {
+func expandSubflowInstances(srcNodes []nodestore.NodeInterface, edges []nodestore.EdgeInterface, defs map[string]*subflowDef, parentEnv map[string]interface{}, ancestry []string, allowOSEnv bool, budget *int) ([]nodestore.NodeInterface, []nodestore.EdgeInterface, map[string]*subflowInstance, error) {
 	instanceIDs := map[string]bool{}
 	for _, n := range srcNodes {
 		if nodestore.IsSubflowInstance(n.GetType()) {
@@ -194,7 +206,7 @@ func expandSubflowInstances(srcNodes []nodestore.NodeInterface, edges []nodestor
 				return nil, nil, nil, fmt.Errorf("subflow instance %q: recursive expansion of subflow %q is not allowed", n.GetID(), defID)
 			}
 		}
-		inst, err := def.expand(n, defs, parentEnv, append(ancestry, defID))
+		inst, err := def.expand(n, defs, parentEnv, append(ancestry, defID), allowOSEnv, budget)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -272,11 +284,11 @@ func edgeTouchesSubflowDef(e nodestore.EdgeInterface, defs map[string]*subflowDe
 // inside the copy expanded recursively — and the per-port endpoint
 // lists used to graft external edges. A port wire pointing at a
 // nested instance resolves through that instance's own port lists.
-func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*subflowDef, parentEnv map[string]interface{}, ancestry []string) (*subflowInstance, error) {
+func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*subflowDef, parentEnv map[string]interface{}, ancestry []string, allowOSEnv bool, budget *int) (*subflowInstance, error) {
 	if len(def.nodes) == 0 {
 		return nil, fmt.Errorf("subflow instance %q: definition %q has no internal nodes", inst.GetID(), def.id)
 	}
-	env := resolveSubflowEnv(def, inst, parentEnv)
+	env := resolveSubflowEnv(def, inst, parentEnv, allowOSEnv)
 
 	idMap := make(map[string]string, len(def.nodes))
 	for _, inner := range def.nodes {
@@ -305,9 +317,16 @@ func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*sub
 
 	// Nested instances expand recursively; edges referencing them are
 	// rewired through their own ports by the recursive call.
-	innerNodes, innerEdges, innerInstances, err := expandSubflowInstances(innerNodes, innerEdges, defs, env, ancestry)
+	innerNodes, innerEdges, innerInstances, err := expandSubflowInstances(innerNodes, innerEdges, defs, env, ancestry, allowOSEnv, budget)
 	if err != nil {
 		return nil, err
+	}
+	// Spend the expansion budget on the produced inner graph — the
+	// recursive call above already spent its own nested copies, so
+	// count only this level's surviving nodes.
+	*budget -= len(innerNodes)
+	if *budget < 0 {
+		return nil, fmt.Errorf("subflow expansion exceeds %d expanded nodes", maxExpandedNodes)
 	}
 
 	result := &subflowInstance{nodes: innerNodes, edges: innerEdges}
@@ -359,7 +378,7 @@ func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*sub
 
 // resolveSubflowEnv computes an instance's effective env: parent scope
 // (env inheritance) < definition defaults < instance overrides.
-func resolveSubflowEnv(def *subflowDef, inst nodestore.NodeInterface, parent map[string]interface{}) map[string]interface{} {
+func resolveSubflowEnv(def *subflowDef, inst nodestore.NodeInterface, parent map[string]interface{}, allowOSEnv bool) map[string]interface{} {
 	env := make(map[string]interface{}, len(parent)+len(def.env))
 	for k, v := range parent {
 		env[k] = v
@@ -368,13 +387,13 @@ func resolveSubflowEnv(def *subflowDef, inst nodestore.NodeInterface, parent map
 		if ev.Name == "" {
 			continue
 		}
-		env[ev.Name] = subflowEnvValue(ev.Value, ev.Type)
+		env[ev.Name] = subflowEnvValue(ev.Value, ev.Type, allowOSEnv)
 	}
 	for _, ev := range parseInstanceEnv(inst.GetData()["env"]) {
 		if ev.Name == "" {
 			continue
 		}
-		env[ev.Name] = subflowEnvValue(ev.Value, ev.Type)
+		env[ev.Name] = subflowEnvValue(ev.Value, ev.Type, allowOSEnv)
 	}
 	return env
 }
@@ -415,8 +434,9 @@ func parseInstanceEnv(raw interface{}) []subflowEnvVar {
 
 // subflowEnvValue applies the Node-RED env var typing: "num" and
 // "bool" parse the string form, "json" parses JSON text, "env" reads a
-// process environment variable; "str"/"cred"/empty keep the raw value.
-func subflowEnvValue(v interface{}, typ string) interface{} {
+// process environment variable when allowOSEnv permits it (otherwise
+// resolves empty); "str"/"cred"/empty keep the raw value.
+func subflowEnvValue(v interface{}, typ string, allowOSEnv bool) interface{} {
 	str := ""
 	switch t := v.(type) {
 	case string:
@@ -440,6 +460,9 @@ func subflowEnvValue(v interface{}, typ string) interface{} {
 			return parsed
 		}
 	case "env":
+		if !allowOSEnv {
+			return ""
+		}
 		return os.Getenv(str)
 	case "str", "cred":
 		// String-typed values are coerced so a numeric or boolean
@@ -534,7 +557,7 @@ func (e *WorkflowEngine) NodeEnv(workflowID, nodeID, name string) (interface{}, 
 	}
 
 	// 1. Group env: the node's view group wins over everything else.
-	if v, ok := groupEnvValue(workflow, nodeID, name); ok {
+	if v, ok := groupEnvValue(workflow, nodeID, name, e.AllowOSEnv); ok {
 		return v, true
 	}
 
@@ -553,7 +576,7 @@ func (e *WorkflowEngine) NodeEnv(workflowID, nodeID, name string) (interface{}, 
 
 	// 3. Flow env: workflow-level table stored in view.env.
 	if workflow.GetView() != nil {
-		if v, ok := envListValue(workflow.GetView()["env"], name); ok {
+		if v, ok := envListValue(workflow.GetView()["env"], name, e.AllowOSEnv); ok {
 			return v, true
 		}
 	}
@@ -568,7 +591,7 @@ func (e *WorkflowEngine) NodeEnv(workflowID, nodeID, name string) (interface{}, 
 // groupEnvValue finds name in the env table of the view group that
 // contains nodeID. A subflow-expanded node id ("<instance>/<inner>")
 // inherits the env of any group holding its top-level ancestor.
-func groupEnvValue(workflow nodestore.WorkflowInterface, nodeID, name string) (interface{}, bool) {
+func groupEnvValue(workflow nodestore.WorkflowInterface, nodeID, name string, allowOSEnv bool) (interface{}, bool) {
 	if workflow.GetView() == nil {
 		return nil, false
 	}
@@ -581,7 +604,7 @@ func groupEnvValue(workflow nodestore.WorkflowInterface, nodeID, name string) (i
 		if !groupContains(g, nodeID) {
 			continue
 		}
-		if v, ok := envListValue(g["env"], name); ok {
+		if v, ok := envListValue(g["env"], name, allowOSEnv); ok {
 			return v, true
 		}
 	}
@@ -607,10 +630,10 @@ func groupContains(g map[string]interface{}, nodeID string) bool {
 
 // envListValue resolves one name out of a raw [{name,type,value}]
 // env list, applying the Node-RED env typing (subflowEnvValue).
-func envListValue(raw interface{}, name string) (interface{}, bool) {
+func envListValue(raw interface{}, name string, allowOSEnv bool) (interface{}, bool) {
 	for _, ev := range parseInstanceEnv(raw) {
 		if ev.Name == name {
-			return subflowEnvValue(ev.Value, ev.Type), true
+			return subflowEnvValue(ev.Value, ev.Type, allowOSEnv), true
 		}
 	}
 	return nil, false
@@ -627,7 +650,7 @@ func (e *WorkflowEngine) SetGlobalEnv(raw interface{}) {
 		if ev.Name == "" {
 			continue
 		}
-		resolved[ev.Name] = subflowEnvValue(ev.Value, ev.Type)
+		resolved[ev.Name] = subflowEnvValue(ev.Value, ev.Type, e.AllowOSEnv)
 	}
 	e.runMu.Lock()
 	e.globalEnv = resolved

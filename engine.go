@@ -142,6 +142,26 @@ type WorkflowEngine struct {
 	// workflow.GetView()["maxSteps"] overrides it (same semantics).
 	// Wired in main via GOFLOW_MAX_STEPS.
 	MaxSteps int
+	// MaxInflightTraversals bounds concurrently running message
+	// traversals (inject/Emit/DeliverSync): each external injection
+	// launches a goroutine and — with a durable inbox — one DB row
+	// per hop, so an unbounded flood is a goroutine + write
+	// amplification DoS. 0 falls back to
+	// DefaultMaxInflightTraversals; <0 disables the bound.
+	// Wired in main via GOFLOW_MAX_INFLIGHT.
+	MaxInflightTraversals int
+	// inflight counts currently running traversals (runMu).
+	inflight int
+	// pendingWF indexes pending response channels by workflow so
+	// StopWorkflow can drop a stopped run's correlations.
+	pendingWF map[string]string
+	// AllowOSEnv gates whether flows may read process environment
+	// variables — "env"-typed vars in group/subflow/flow/global env
+	// layers and the env.get OS fallback in function nodes. Default
+	// off: a flow author should not be able to exfiltrate process
+	// secrets (DB DSNs, cloud credentials) via env.get. Enable via
+	// GOFLOW_ALLOW_OS_ENV=1 (wired in main) — mirrors AllowExec.
+	AllowOSEnv bool
 	// nodebase.ContextStore persists function-node context (node/flow/global
 	// scopes) across engine restarts and undeploy/redeploy — wired in
 	// main via a type assertion on the storage backend, like
@@ -184,6 +204,7 @@ func NewWorkflowEngine() *WorkflowEngine {
 		runCtx:        make(map[string]context.Context),
 		runGen:        make(map[string]int64),
 		deployLocks:   make(map[string]*sync.Mutex),
+		pendingWF:     make(map[string]string),
 		nodeFactories: make(map[string]nodebase.NodeRegistration),
 	}
 }
@@ -209,7 +230,13 @@ func (e *WorkflowEngine) RunningFlow(workflowID string) (nodestore.WorkflowInter
 	e.runMu.Lock()
 	defer e.runMu.Unlock()
 	workflow, ok := e.flows[workflowID]
-	return workflow, ok
+	if !ok {
+		return nil, false
+	}
+	// The stored running flow carries injected credentials — hand
+	// callers a sentinel-masked clone so admin/debug surfaces and
+	// executors doing graph lookups can never read live secrets.
+	return scrubWorkflowCredentials(workflow), true
 }
 
 // RunContext returns the live run context for workflowID — bound to
@@ -306,7 +333,7 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 	// which persists the deployed flag afterwards) never write the
 	// expanded graph back to storage.
 	expanded := cloneWorkflow(workflow)
-	if err := ExpandSubflows(expanded); err != nil {
+	if err := ExpandSubflows(expanded, e.AllowOSEnv); err != nil {
 		return "", nil, fmt.Errorf("subflow expansion: %w", err)
 	}
 	workflow = expanded
@@ -410,7 +437,28 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 		e.runCtx[workflow.GetID()] = ctx
 	}
 	e.flows[workflow.GetID()] = workflow
+	// Stamp the run's workflow id on every node here — the single-
+	// threaded point before activation and traversals fan out.
+	// executorForNode also stamps defensively, but doing it there
+	// alone would race: several goroutines can hit the same shared
+	// node object concurrently.
+	for _, n := range workflow.GetNodes() {
+		n.SetWorkflowID(workflow.GetID())
+	}
 	e.runMu.Unlock()
+
+	// Operator-visible warning for tlsConfig nodes that disable peer
+	// verification — insecure by explicit opt-out (Node-RED parity)
+	// but silent downgrade must be audible in the deploy log.
+	for _, node := range workflow.GetNodes() {
+		if node.GetType() != "tlsConfig" {
+			continue
+		}
+		if v, ok := node.GetData()["verifyservercert"].(bool); ok && !v {
+			e.EmitEvent(workflow.GetID(), node.GetID(), nodebase.NodeName(node), "warn",
+				"tlsConfig disables server certificate verification (InsecureSkipVerify)")
+		}
+	}
 
 	if !keepCtx && oldCancel != nil {
 		oldCancel()
@@ -443,6 +491,14 @@ func (e *WorkflowEngine) StopWorkflow(workflowID string) error {
 	delete(e.states, workflowID)
 	delete(e.journal, workflowID)
 	delete(e.runCtx, workflowID)
+	// Drop this run's pending response correlations so unanswered
+	// requests cannot outlive their workflow.
+	for msgID, wf := range e.pendingWF {
+		if wf == workflowID {
+			delete(e.pendingWF, msgID)
+			delete(e.pending, msgID)
+		}
+	}
 	if exists {
 		cancel() // abort in-flight traversals before releasing the lock
 		delete(e.running, workflowID)
@@ -493,7 +549,7 @@ func (e *WorkflowEngine) EmitEvent(workflowID, nodeID, nodeName, level, message 
 		NodeID:   nodeID,
 		NodeName: nodeName,
 		Level:    level,
-		Message:  message,
+		Message:  maskURICredentials(message),
 	})
 	if len(e.events[workflowID]) > maxWorkflowEvents {
 		e.events[workflowID] = e.events[workflowID][len(e.events[workflowID])-maxWorkflowEvents:]
@@ -657,7 +713,9 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 	// (initial deploy, full and partial redeploy alike) — e.g. the
 	// dashboard hub refreshes its per-workflow manifest here.
 	if e.deployObserver != nil {
-		e.deployObserver.WorkflowActivated(workflow)
+		// The running flow carries injected credentials — observers
+		// (dashboard hub, admin surfaces) get a sentinel-masked view.
+		e.deployObserver.WorkflowActivated(scrubWorkflowCredentials(workflow))
 	}
 
 	e.EmitEvent(workflow.GetID(), "", "", "info", "workflow deployed")
@@ -797,10 +855,16 @@ func (e *WorkflowEngine) inject(workflowID, fromNodeID string, payload nodestore
 		e.runMu.Unlock()
 		return "", nil, fmt.Errorf("workflow %q is not running", workflowID)
 	}
+	if limit := e.inflightLimit(); limit >= 0 && e.inflight >= limit {
+		e.runMu.Unlock()
+		return "", nil, fmt.Errorf("workflow %q: inflight traversal limit %d reached", workflowID, limit)
+	}
+	e.inflight++
 	e.seq++
 	msgID := fmt.Sprintf("msg-%d", e.seq)
 	ch := make(chan nodestore.MessageInterface, 1)
 	e.pending[msgID] = ch
+	e.pendingWF[msgID] = workflowID
 	// Bind the traversal to the run context so StopWorkflow cancels
 	// in-flight work; fall back to Background when none is recorded.
 	ctx, ok := e.runCtx[workflowID]
@@ -830,9 +894,36 @@ func (e *WorkflowEngine) inject(workflowID, fromNodeID string, payload nodestore
 
 	// Execute the downstream subgraph in the background; an httpResponse
 	// node (or the fallback timeout in the caller) resolves the request.
-	go e.ExecuteDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports)
+	go func() {
+		defer e.inflightDone()
+		e.ExecuteDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports)
+	}()
 
 	return msgID, ch, nil
+}
+
+// DefaultMaxInflightTraversals is the fallback bound on concurrently
+// running traversals — see WorkflowEngine.MaxInflightTraversals.
+const DefaultMaxInflightTraversals = 512
+
+// inflightLimit resolves the effective inflight-traversal bound:
+// <0 disables, 0 falls back to DefaultMaxInflightTraversals.
+func (e *WorkflowEngine) inflightLimit() int {
+	if e.MaxInflightTraversals < 0 {
+		return -1
+	}
+	if e.MaxInflightTraversals == 0 {
+		return DefaultMaxInflightTraversals
+	}
+	return e.MaxInflightTraversals
+}
+
+// inflightDone releases one traversal slot (called when a background
+// traversal finishes).
+func (e *WorkflowEngine) inflightDone() {
+	e.runMu.Lock()
+	e.inflight--
+	e.runMu.Unlock()
 }
 
 // DeliverSync performs the same bookkeeping as inject but runs the
@@ -848,11 +939,18 @@ func (e *WorkflowEngine) DeliverSync(workflowID, fromNodeID string, payload node
 		e.runMu.Unlock()
 		return fmt.Errorf("workflow %q is not running", workflowID)
 	}
+	if limit := e.inflightLimit(); limit >= 0 && e.inflight >= limit {
+		e.runMu.Unlock()
+		return fmt.Errorf("workflow %q: inflight traversal limit %d reached", workflowID, limit)
+	}
+	e.inflight++
 	ctx, ok := e.runCtx[workflowID]
 	if !ok || ctx == nil {
 		ctx = context.Background()
 	}
 	e.runMu.Unlock()
+
+	defer e.inflightDone()
 
 	if payload.GetMetadata() == nil {
 		payload.SetMetadata(map[string]interface{}{})
@@ -912,6 +1010,7 @@ func (e *WorkflowEngine) ResolveResponse(msgID string, payload nodestore.Message
 	ch, ok := e.pending[msgID]
 	if ok {
 		delete(e.pending, msgID)
+		delete(e.pendingWF, msgID)
 	}
 	e.runMu.Unlock()
 	if !ok {
@@ -926,6 +1025,7 @@ func (e *WorkflowEngine) ResolveResponse(msgID string, payload nodestore.Message
 func (e *WorkflowEngine) DiscardPending(msgID string) {
 	e.runMu.Lock()
 	delete(e.pending, msgID)
+	delete(e.pendingWF, msgID)
 	e.runMu.Unlock()
 }
 
@@ -942,7 +1042,10 @@ func (e *WorkflowEngine) LookupNode(workflowID, nodeID string) (nodestore.NodeIn
 	}
 	for _, node := range workflow.GetNodes() {
 		if node.GetID() == nodeID {
-			return node, true
+			// The stored node carries injected credentials — return
+			// a sentinel-masked copy so callers (link resolution,
+			// config-node lookups) can never read live secrets.
+			return scrubNodeCredentials(node), true
 		}
 	}
 	return nodestore.NewNode("", ""), false
@@ -1440,7 +1543,12 @@ func (e *WorkflowEngine) executorForNode(workflowID string, node nodestore.NodeI
 	// The executor wraps the node entity: stamp the run's workflow id
 	// so factories and long-lived nodes see a consistent identity even
 	// when the caller built the node without one (tests, imports).
-	node.SetWorkflowID(workflowID)
+	// Guarded by the != check — startRun pre-stamps every node, so the
+	// write only happens for nodes that bypass it, and concurrent
+	// reads on already-stamped nodes stay race-free.
+	if node.GetWorkflowID() != workflowID {
+		node.SetWorkflowID(workflowID)
+	}
 	if factory, ok := e.nodeFactoryFor(node.GetType()); ok {
 		return factory(node, e)
 	}

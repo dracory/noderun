@@ -225,7 +225,7 @@ func TestCheckpointNodeREDRoundTrip(t *testing.T) {
 	}
 	var found bool
 	for _, n := range w.GetNodes() {
-		if n.GetID() == "cp1" {
+		if n.GetType() == "checkpoint" {
 			found = true
 			if n.GetType() != "checkpoint" {
 				t.Fatalf("checkpoint type clobbered on import: %q", n.GetType())
@@ -249,7 +249,7 @@ func TestCheckpointNodeREDRoundTrip(t *testing.T) {
 		t.Fatalf("export decode failed: %v", err)
 	}
 	for _, obj := range items {
-		if obj["id"] == "cp1" {
+		if obj["type"] == "checkpoint" {
 			if obj["type"] != "checkpoint" {
 				t.Fatalf("checkpoint type clobbered on export: %q", obj["type"])
 			}

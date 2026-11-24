@@ -37,6 +37,43 @@ func cloneWorkflow(w nodestore.WorkflowInterface) nodestore.WorkflowInterface {
 	return c
 }
 
+// scrubWorkflowCredentials returns a deep clone of w with every
+// credential field re-masked to the sentinel. The running flow stored
+// in e.flows carries injected secrets; observer/admin-facing copies
+// (deploy observer, RunningFlow) must never expose them.
+func scrubWorkflowCredentials(w nodestore.WorkflowInterface) nodestore.WorkflowInterface {
+	clone := nodestore.DeepCloneWorkflow(w)
+	for _, n := range clone.GetNodes() {
+		data := n.GetData()
+		for _, k := range nodestore.CredentialKeys(n.GetType()) {
+			if _, ok := data[k]; ok {
+				data[k] = nodestore.CredentialSentinel
+			}
+		}
+	}
+	return clone
+}
+
+// scrubNodeCredentials returns node unchanged when its type declares
+// no credential keys, else a fresh node whose data clone has every
+// credential field re-masked to the sentinel — the LookupNode view of
+// a credential-injected running node.
+func scrubNodeCredentials(node nodestore.NodeInterface) nodestore.NodeInterface {
+	keys := nodestore.CredentialKeys(node.GetType())
+	if len(keys) == 0 {
+		return node
+	}
+	data := cloneDataMap(node.GetData())
+	for _, k := range keys {
+		if _, ok := data[k]; ok {
+			data[k] = nodestore.CredentialSentinel
+		}
+	}
+	return nodestore.NewNode(node.GetID(), node.GetType()).
+		SetPosition(node.GetPositionX(), node.GetPositionY()).
+		SetData(data)
+}
+
 // messageWire is the on-disk JSON shape of a message — identical to
 // the legacy flowrunner.Message encoding. Durable queue files cannot
 // marshal an interface field, so dirQueueFile stores this wire type

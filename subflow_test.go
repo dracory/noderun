@@ -239,20 +239,25 @@ func TestNodeREDImportRuns(t *testing.T) {
 
 	// The subflow definition must be folded into a type:"subflow"
 	// node with its internal node carried in Data.
+	// Import re-mints source ids — locate by type: the def folds
+	// into a "subflow" node, the instance into "subflow:<newDefID>".
 	var def, inst nodestore.NodeInterface
 	for i := range workflow.GetNodes() {
-		switch workflow.GetNodes()[i].GetID() {
-		case "defX":
+		switch {
+		case workflow.GetNodes()[i].GetType() == "subflow":
 			def = workflow.GetNodes()[i]
-		case "nrInst":
+		case strings.HasPrefix(workflow.GetNodes()[i].GetType(), "subflow:"):
 			inst = workflow.GetNodes()[i]
 		}
 	}
-	if def == nil || def.GetType() != "subflow" {
+	if def == nil {
 		t.Fatalf("subflow definition not imported; nodes=%+v", workflow.GetNodes())
 	}
-	if inst == nil || inst.GetType() != "subflow:defX" {
+	if inst == nil {
 		t.Fatalf("subflow instance not imported; nodes=%+v", workflow.GetNodes())
+	}
+	if inst.GetType() != "subflow:"+def.GetID() {
+		t.Fatalf("instance type %q does not reference def %q", inst.GetType(), def.GetID())
 	}
 	inner, _ := def.GetData()["nodes"].([]interface{})
 	if len(inner) != 1 {
@@ -270,7 +275,7 @@ func TestNodeREDImportRuns(t *testing.T) {
 	}
 	var reDef nodestore.NodeInterface
 	for i := range reimported.GetNodes() {
-		if reimported.GetNodes()[i].GetID() == "defX" {
+		if reimported.GetNodes()[i].GetType() == "subflow" {
 			reDef = reimported.GetNodes()[i]
 		}
 	}
@@ -288,13 +293,19 @@ func TestNodeREDImportRuns(t *testing.T) {
 	}
 	defer func() { _ = engine.StopWorkflow(workflow.GetID()) }()
 
-	nodes, events := waitForStatus(engine, workflow.GetID(), "nrDbg", "ok", 3*time.Second)
-	if nodes["nrDbg"] != "ok" {
+	var dbgID string
+	for _, n := range workflow.GetNodes() {
+		if n.GetType() == "debug" {
+			dbgID = n.GetID()
+		}
+	}
+	nodes, events := waitForStatus(engine, workflow.GetID(), dbgID, "ok", 3*time.Second)
+	if nodes[dbgID] != "ok" {
 		t.Fatalf("debug never reached ok; statuses=%v events=%v", nodes, events)
 	}
 	var sawPayload bool
 	for _, ev := range events {
-		if ev.NodeID == "nrDbg" && strings.Contains(ev.Message, `"fromNR:hi"`) {
+		if ev.NodeID == dbgID && strings.Contains(ev.Message, `"fromNR:hi"`) {
 			sawPayload = true
 		}
 	}
@@ -410,7 +421,7 @@ func TestExpandSubflowsErrorLeavesWorkflowUnchanged(t *testing.T) {
 	}
 	w := nodestore.NewWorkflow("").SetID("test-subflow-no-mutation").SetNodes(append([]nodestore.NodeInterface(nil), nodes...)).SetEdges(append([]nodestore.EdgeInterface(nil), edges...))
 
-	if err := ExpandSubflows(w); err == nil {
+	if err := ExpandSubflows(w, false); err == nil {
 		t.Fatalf("expansion of unknown definition succeeded; want error")
 	} else if !strings.Contains(err.Error(), `definition "nope" not found`) {
 		t.Fatalf("unexpected error: %v", err)
@@ -440,7 +451,7 @@ func TestExpandSubflowsDanglingEdgesFail(t *testing.T) {
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inj", "d2"),
 	})
-	if err := ExpandSubflows(w); err == nil {
+	if err := ExpandSubflows(w, false); err == nil {
 		t.Fatalf("edge into a subflow definition expanded cleanly; want error")
 	} else if !strings.Contains(err.Error(), "subflow definition") {
 		t.Fatalf("unexpected error: %v", err)
@@ -458,7 +469,7 @@ func TestExpandSubflowsDanglingEdgesFail(t *testing.T) {
 		),
 		nodestore.NewNode("inst", "subflow:d3").SetData(map[string]interface{}{}),
 	})
-	if err := ExpandSubflows(w2); err == nil {
+	if err := ExpandSubflows(w2, false); err == nil {
 		t.Fatalf("internal edge to unknown node expanded cleanly; want error")
 	} else if !strings.Contains(err.Error(), "unknown node") {
 		t.Fatalf("unexpected error: %v", err)

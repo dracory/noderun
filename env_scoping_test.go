@@ -53,26 +53,40 @@ func TestEnvScopingChain(t *testing.T) {
 	}
 	defer func() { _ = engine.StopWorkflow(workflow.ID) }()
 
+	// Activation runs async and reads view/node data without runMu —
+	// wait for it to finish before peeling layers off the live flow.
+	waitForEvents(engine, workflow.ID, 3*time.Second, func(ev NodeEvent) bool {
+		return ev.Message == "workflow deployed"
+	})
+
 	// Group env wins over every other layer.
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "group" {
 		t.Fatalf("expected group env to win, got %#v (ok=%v)", v, ok)
 	}
 
-	// Without group membership the subflow overlay takes over.
-	running, _ := engine.RunningFlow(workflow.ID)
+	// Peel the layers off the live run in place — RunningFlow returns
+	// a masked clone by design, so the test mutates e.flows directly
+	// under runMu to stay race-free against the running traversal.
+	engine.runMu.Lock()
+	running := engine.flows[workflow.ID]
 	running.GetView()["groups"] = []interface{}{}
+	engine.runMu.Unlock()
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "subflow" {
 		t.Fatalf("expected subflow overlay to win, got %#v (ok=%v)", v, ok)
 	}
 
 	// Without the overlay the flow env applies.
+	engine.runMu.Lock()
 	delete(running.FindNodeByID("fn").GetData(), subflowEnvKey)
+	engine.runMu.Unlock()
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "flow" {
 		t.Fatalf("expected flow env to win, got %#v (ok=%v)", v, ok)
 	}
 
 	// Without flow env the global-config layer applies.
+	engine.runMu.Lock()
 	delete(running.GetView(), "env")
+	engine.runMu.Unlock()
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "global" {
 		t.Fatalf("expected global-config env to win, got %#v (ok=%v)", v, ok)
 	}
@@ -118,6 +132,7 @@ func TestEnvScopingEnvGet(t *testing.T) {
 	t.Setenv("GOFLOW_ENV_OS_ONLY", "os-only")
 
 	engine := NewEngine()
+	engine.AllowOSEnv = true // the OS env fallback is opt-in
 	engine.SetGlobalEnv([]interface{}{
 		map[string]interface{}{"name": "GOFLOW_ENV_E2E", "type": "str", "value": "global-value"},
 	})

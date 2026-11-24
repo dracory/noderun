@@ -230,16 +230,21 @@ func (e *WorkflowEngine) dispatchProblem(workflowID string, node nodestore.NodeI
 	if in != nil {
 		originalData = in.GetPayload()
 	}
+	// The dead-letter envelope is persisted durably — mask credential
+	// fields for the failed node's type (and any sentinels in flight)
+	// the same way the run journal does, so secrets cannot ride the
+	// original payload into queue storage.
+	scrubbedData := scrubJournalValue(node.GetType(), originalData, 0)
 	payload := nodestore.NewMessage().SetPayload(map[string]interface{}{
 		"error": map[string]interface{}{
 			"node":                   node.GetID(),
 			"nodeName":               nodebase.NodeName(node),
 			"type":                   node.GetType(),
-			"message":                cause.Error(),
+			"message":                maskURICredentials(cause.Error()),
 			"ts":                     time.Now().UTC().Format(time.RFC3339Nano),
-			"originalPayloadSummary": summarizePayloadData(originalData),
+			"originalPayloadSummary": summarizePayloadData(scrubbedData),
 		},
-		"originalData": originalData,
+		"originalData": scrubbedData,
 	}).SetMetadata(map[string]interface{}{"problemMessage": true}).SetTimestamp(time.Now())
 
 	if err := q.Enqueue(payload); err != nil {

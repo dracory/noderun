@@ -48,8 +48,10 @@ func TestCredentialsProviderInjection(t *testing.T) {
 	if rn == nil {
 		t.Fatal("node n1 missing from running flow")
 	}
-	if rn.GetData()["password"] != "hunter2" {
-		t.Fatalf("expected injected secret, got %v", rn.GetData()["password"])
+	// The running-flow view re-masks credentials to the sentinel —
+	// injected secrets are visible only to the executing node.
+	if rn.GetData()["password"] != nodestore.CredentialSentinel {
+		t.Fatalf("running flow leaked injected secret: %v", rn.GetData()["password"])
 	}
 	// The caller's stored document must keep the sentinel — deploy
 	// works on a clone.

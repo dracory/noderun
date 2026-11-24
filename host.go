@@ -31,6 +31,14 @@ func (e *WorkflowEngine) ExecAllowed() bool {
 	return e.AllowExec
 }
 
+// OSEnvAllowed reports whether flows may read process environment
+// variables — consulted by the function node's env.get OS fallback
+// (and the engine's own "env"-typed resolution) via an optional
+// interface, so hosts without the method keep Node-RED behaviour.
+func (e *WorkflowEngine) OSEnvAllowed() bool {
+	return e.AllowOSEnv
+}
+
 // SharedHTTPRouter implements nodebase.NodeHost: the optional shared
 // listener HTTP-serving nodes mount routes on.
 func (e *WorkflowEngine) SharedHTTPRouter() nodebase.HTTPRouter {

@@ -169,6 +169,7 @@ func TestFunctionSpec(t *testing.T) {
 				},
 			}
 			engine := specDeployFlow(t, wf)
+			engine.AllowOSEnv = true // the env.get OS fallback is opt-in
 			ch := specInjectInto(t, engine, wf.ID, "inj", &Message{
 				Payload:   "go",
 				Timestamp: time.Now(),
@@ -195,6 +196,7 @@ func TestFunctionSpec(t *testing.T) {
 				},
 			}
 			engine := specDeployFlow(t, wf)
+			engine.AllowOSEnv = true // the env.get OS fallback is opt-in
 			ch := specInjectInto(t, engine, wf.ID, "inj", &Message{
 				Payload:   "go",
 				Timestamp: time.Now(),

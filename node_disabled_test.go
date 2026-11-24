@@ -278,11 +278,17 @@ func TestDisabledNodeRoundTrip(t *testing.T) {
 		t.Fatalf("import failed: %v", err)
 	}
 
-	// Node-level d survives in node Data.
-	var n1 nodestore.NodeInterface
+	// Node-level d survives in node Data. Source ids are re-minted
+	// on import — n1 is the inject, n2/n3 the debug nodes (x=200/100).
+	var n1, n2, n3 nodestore.NodeInterface
 	for _, nd := range w.GetNodes() {
-		if nd.GetID() == "n1" {
+		switch {
+		case nd.GetType() == "inject":
 			n1 = nd
+		case nd.GetType() == "debug" && nd.GetPositionX() == 200:
+			n2 = nd
+		case nd.GetType() == "debug":
+			n3 = nd
 		}
 	}
 	if n1 == nil || n1.GetData()["d"] != true {
@@ -292,15 +298,6 @@ func TestDisabledNodeRoundTrip(t *testing.T) {
 		t.Fatal("nodeDisabled false for d:true node")
 	}
 	// n2 is disabled by tab AND by group; n3 is enabled.
-	var n2, n3 nodestore.NodeInterface
-	for _, nd := range w.GetNodes() {
-		if nd.GetID() == "n2" {
-			n2 = nd
-		}
-		if nd.GetID() == "n3" {
-			n3 = nd
-		}
-	}
 	if !nodeDisabled(w, n2) {
 		t.Fatal("nodeDisabled false for node on disabled tab+group")
 	}
@@ -320,12 +317,12 @@ func TestDisabledNodeRoundTrip(t *testing.T) {
 	}
 	var tab1, grp, node1 map[string]interface{}
 	for _, it := range items {
-		switch it["id"] {
-		case nodeREDTabID("Main"):
+		switch {
+		case it["id"] == nodeREDTabID("Main"):
 			tab1 = it
-		case "g1":
+		case it["type"] == "group":
 			grp = it
-		case "n1":
+		case it["type"] == "inject":
 			node1 = it
 		}
 	}

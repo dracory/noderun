@@ -282,6 +282,7 @@ func TestFunctionNodeWarnLog(t *testing.T) {
 func runFunctionScript(t *testing.T, script string) (nodestore.MessageInterface, error) {
 	t.Helper()
 	engine := NewEngine()
+	engine.AllowOSEnv = true // the env.get OS fallback is opt-in
 	n := function.NewFunctionNode(nodestore.NewNode("fn", "function").SetWorkflowID("sandbox-wf"), &function.FunctionConfig{Func: script}, engine)
 	return n.Execute(context.Background(), &Message{
 		Payload:   map[string]interface{}{},
