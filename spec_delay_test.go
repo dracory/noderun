@@ -2,7 +2,6 @@ package noderunner_test
 
 import (
 	. "github.com/dracory/noderun"
-	"strings"
 	"testing"
 	"time"
 )
@@ -44,7 +43,7 @@ func TestDelaySpec(t *testing.T) {
 			}
 			defer engine.DiscardPending(msgID)
 			specAwaitEvent(t, engine, wf.ID, func(ev NodeEvent) bool {
-				return ev.NodeID == "dbg" && strings.Contains(ev.Message, "wait")
+				return ev.NodeID == "dbg" && ev.Message == "wait"
 			}, 3*time.Second)
 			if elapsed := time.Since(start); elapsed < 140*time.Millisecond {
 				t.Fatalf("message not delayed: %s", elapsed)
