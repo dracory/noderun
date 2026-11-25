@@ -106,35 +106,35 @@ func oracleHTTPResponseMsg(body, contentLength, contentType, status string, stat
 // oracleDifferences is the named-difference list — the only place
 // divergence between this engine and real Node-RED may be recorded.
 var oracleDifferences = []oracleDifference{
-	// --- http: response payload shape & request-context gaps ---
+	// --- http: response payload shape residual ---
 	// httpRequest emits a response object {body, statusCode, headers,…}
 	// while Node-RED puts the response body directly in msg.payload
 	// (ret:"txt"). Each residual names both exact sides of the divergence;
 	// volatile duration/Date fields are scrubbed before comparison.
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: oracleHTMLH1("Hello World!"),
 		Note: "oracle-side residual: Node-RED places the response body directly in msg.payload"},
-	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello World!"), "85", "application/json", "200 OK", 200),
-		Note: "actual-side residual: httpRequest wraps the body in a response object"},
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello World!"), "85", "text/html; charset=utf-8", "200 OK", 200),
+		Note: "actual-side residual: httpRequest wraps the correct body in a response object"},
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "188bc18.5487a3f", Msg: oracleHTMLH1("Hello World!"),
 		Note: "oracle-side residual: the second request should render the endpoint body; goflow keeps msg.url in metadata so that request never runs"},
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "", Msg: "invalid input data format",
 		Note: "actual-side residual: second httpRequest rejects the inject message — msg.url arrives in metadata, not the payload map"},
 	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: oracleHTMLH1("Hello Nick!"),
-		Note: "oracle-side residual: Node-RED exposes req.query.name to the template"},
-	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello !"), "80", "application/json", "200 OK", 200),
-		Note: "actual-side residual: query parameters are not exposed as req.query.* and the response is wrapped"},
+		Note: "oracle-side residual: Node-RED places the response body directly in msg.payload"},
+	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello Nick!"), "84", "text/html; charset=utf-8", "200 OK", 200),
+		Note: "actual-side residual: httpRequest wraps the correct body in a response object"},
 	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: oracleHTMLH1("Hello Nick!"),
-		Note: "oracle-side residual: Node-RED exposes req.params.name to the template"},
-	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello !"), "80", "application/json", "200 OK", 200),
-		Note: "actual-side residual: route parameters are not exposed as req.params.* and the response is wrapped"},
+		Note: "oracle-side residual: Node-RED places the response body directly in msg.payload"},
+	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello Nick!"), "84", "text/html; charset=utf-8", "200 OK", 200),
+		Note: "actual-side residual: httpRequest wraps the correct body in a response object"},
 	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: oracleHTMLH1("User agent: Node-RED"),
-		Note: "oracle-side residual: Node-RED exposes req.headers.user-agent to the template"},
-	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: oracleHTTPResponseMsg(oracleHTMLH1("User agent: "), "85", "application/json", "200 OK", 200),
-		Note: "actual-side residual: request headers are not exposed as req.headers.* and the response is wrapped"},
+		Note: "oracle-side residual: Node-RED places the response body directly in msg.payload"},
+	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: oracleHTTPResponseMsg(oracleHTMLH1("User agent: Go-http-client/1.1"), "103", "text/html; charset=utf-8", "200 OK", 200),
+		Note: "actual-side residual: httpRequest uses Go's default user agent (Node-RED sends Node-RED) and wraps the body in a response object"},
 	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: oracleHTMLH1("Hello Nick"),
-		Note: "oracle-side residual: Node-RED accepts the plain-text POST body and renders the greeting"},
-	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: oracleHTTPResponseMsg("Invalid request body\n", "21", "text/plain; charset=utf-8", "400 Bad Request", 400, map[string][]string{"X-Content-Type-Options": {"nosniff"}}),
-		Note: "actual-side residual: httpTrigger JSON-decodes request bodies, so the plain-text POST is rejected with 400"},
+		Note: "oracle-side residual: Node-RED places the response body directly in msg.payload"},
+	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello Nick"), "83", "text/html; charset=utf-8", "200 OK", 200),
+		Note: "actual-side residual: httpRequest wraps the correct body in a response object"},
 
 	// --- udp: real round-trip emits an event the recorder missed ---
 	{File: "network/udp/01 - Transfer data using UDP protocol.json", Node: "d98b60d3.7331e", Msg: "Hello, World!",
@@ -261,6 +261,7 @@ func TestNodeREDExampleOracle(t *testing.T) {
 
 	accepted := map[int]bool{}         // oracleDifferences indexes actually used
 	flowTolerated := map[string]bool{} // oracleFlowDifferences files actually used
+	ranFlows := map[string]bool{}      // flows whose subtests were selected by -run
 	var failures int
 	var clean int
 	var eventLevelTolerated int
@@ -273,6 +274,7 @@ func TestNodeREDExampleOracle(t *testing.T) {
 		}
 		of := of
 		t.Run("oracle/"+sanitizeName(of.File), func(t *testing.T) {
+			ranFlows[of.File] = true
 			_, flowTol := oracleFlowDifferences[of.File]
 			got, runErr := runOracleFlow(t, path, of)
 			if runErr != nil {
@@ -309,18 +311,24 @@ func TestNodeREDExampleOracle(t *testing.T) {
 		})
 	}
 	for i, d := range oracleDifferences {
+		if !ranFlows[d.File] {
+			continue // selective -run: tolerances for unexecuted flows are not missing
+		}
 		if !accepted[i] {
 			t.Errorf("accepted difference never occurred — remove it: %s node=%s msg=%s (%s)",
 				d.File, d.Node, d.Msg, d.Note)
 		}
 	}
 	for file, note := range oracleFlowDifferences {
+		if !ranFlows[file] {
+			continue // selective -run: tolerances for unexecuted flows are not missing
+		}
 		if !flowTolerated[file] {
 			t.Errorf("flow tolerance never used — remove it or investigate: %s (%s)", file, note)
 		}
 	}
-	t.Logf("%d/%d oracle flows passed without accepted differences; %d used event-level differences; %d used flow-level differences; %d had unaccepted differences/errors",
-		clean, len(orc.Flows), eventLevelTolerated, flowLevelTolerated, failures)
+	t.Logf("%d/%d selected oracle flows passed without accepted differences; %d used event-level differences; %d used flow-level differences; %d had unaccepted differences/errors",
+		clean, len(ranFlows), eventLevelTolerated, flowLevelTolerated, failures)
 }
 
 func TestOracleDifferenceEmptyMsgDoesNotWildcardNode(t *testing.T) {

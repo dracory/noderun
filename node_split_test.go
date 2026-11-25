@@ -2,8 +2,8 @@ package noderunner_test
 
 import (
 	"context"
-	nodestore "github.com/dracory/nodestore"
 	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )
@@ -38,12 +38,11 @@ func TestSplitArray(t *testing.T) {
 		t.Fatalf("expected 3 payloads, got %d", len(out))
 	}
 	for i, p := range out {
-		arr, ok := p.GetPayload().([]interface{})
-		if !ok || len(arr) != 1 {
-			t.Fatalf("payload %d: expected single-element chunk, got %v", i, p.GetPayload())
-		}
-		if arr[0] != float64(i+1) {
-			t.Fatalf("payload %d: expected value %d, got %v", i, i+1, arr[0])
+		// Node-RED emits the element itself when arraySplt is 1; only
+		// larger chunk lengths produce array payloads. (nodebase split
+		// parity change.)
+		if p.GetPayload() != float64(i+1) {
+			t.Fatalf("payload %d: expected value %d, got %v", i, i+1, p.GetPayload())
 		}
 		if got := partField(t, p, "index"); got != i {
 			t.Fatalf("payload %d: parts.index = %v", i, got)
@@ -161,11 +160,14 @@ func TestSplitNestedProperty(t *testing.T) {
 	if m["other"] != "keep" {
 		t.Fatalf("sibling fields must be preserved: %v", m)
 	}
-	chunk, ok := m["items"].([]interface{})
-	if !ok || len(chunk) != 1 || chunk[0] != "x" {
-		t.Fatalf("property not replaced by chunk: %v", m["items"])
+	// With the default chunk length 1 the source property is replaced by
+	// the element itself, not a one-element array (Node-RED parity).
+	if m["items"] != "x" {
+		t.Fatalf("property not replaced by element: %v", m["items"])
 	}
-	if got := partField(t, out[0], "property"); got != "items" {
+	// The rewrite records the full message path in parts.property; the
+	// legacy bare property name is interpreted as payload.items.
+	if got := partField(t, out[0], "property"); got != "payload.items" {
 		t.Fatalf("parts.property = %v", got)
 	}
 }

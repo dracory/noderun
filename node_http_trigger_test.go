@@ -3,12 +3,12 @@ package noderunner_test
 import (
 	"context"
 	"fmt"
+	"github.com/dracory/nodebase"
+	. "github.com/dracory/noderun"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	. "github.com/dracory/noderun"
-	"github.com/dracory/nodebase"
 	"strings"
 	"sync"
 	"testing"
@@ -68,7 +68,7 @@ func TestHTTPTriggerBodyLimit(t *testing.T) {
 const maxTriggerBodyBytes = 1 << 20
 
 // TestHTTPTriggerRouteParams — NR-25: ":name" path segments land in
-// Data["params"].
+// msg.req.params.
 func TestHTTPTriggerRouteParams(t *testing.T) {
 	// Exercise the mux conversion directly — no listener needed.
 	pattern, params := nodebase.MuxPattern("/user/:id/orders/:orderID")
@@ -92,7 +92,7 @@ func TestHTTPTriggerRouteParams(t *testing.T) {
 			{ID: "echo", Type: "function", Data: map[string]interface{}{
 				// Mutate and return msg so the msgId metadata survives
 				// for the httpResponse correlation.
-				"func": "msg.payload = msg.payload.params.id; return msg;",
+				"func": "msg.payload = msg.req.params.id; return msg;",
 			}},
 			{ID: "resp", Type: "httpResponse", Data: map[string]interface{}{}},
 		},
@@ -340,7 +340,7 @@ func TestHTTPTriggerMainListenerServes(t *testing.T) {
 }
 
 // TestHTTPTriggerMainListenerRouteParams — ":name" wildcards still land
-// in Data["params"] when served through the shared router.
+// in msg.req.params when served through the shared router.
 func TestHTTPTriggerMainListenerRouteParams(t *testing.T) {
 	engine := NewEngine()
 	router := newSharedTestRouter()
@@ -351,6 +351,13 @@ func TestHTTPTriggerMainListenerRouteParams(t *testing.T) {
 	wf := triggerMainWorkflow("test-main-params", map[string]interface{}{
 		"method": "GET", "path": "/user/:id",
 	})
+	wf.Nodes = append(wf.Nodes, Node{ID: "echo", Type: "function", Data: map[string]interface{}{
+		"func": "msg.payload = msg.req.params.id; return msg;",
+	}})
+	wf.Edges = []Edge{
+		{ID: "e1", Source: "trig", Target: "echo"},
+		{ID: "e2", Source: "echo", Target: "resp"},
+	}
 	if _, err := engine.DeployWorkflow(context.Background(), wf, nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}

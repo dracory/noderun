@@ -50,7 +50,10 @@ func TestSortSpec(t *testing.T) {
 				Nodes: []Node{
 					{ID: "src", Type: "inject", Data: map[string]interface{}{}},
 					{ID: "st", Type: "sort", Data: map[string]interface{}{
-						"target": "seq", "order": order, "asNum": asNum, "seqKey": seqKey,
+						// nodebase uses the Node-RED serialized spelling
+						// as_num; seqKey is a full message path, so payload
+						// object fields are addressed as payload.<field>.
+						"target": "seq", "order": order, "as_num": asNum, "seqKey": seqKey,
 					}},
 					{ID: "dbg", Type: "debug", Data: map[string]interface{}{"complete": "true"}},
 				},
@@ -172,7 +175,7 @@ func TestSortSpec(t *testing.T) {
 			checkSeq(t, "ascending", false, "payload", "payload", inStrings, []interface{}{"1000", "200", "30", "4"})
 		})
 		s.it("should sort message group/prop (not number, ascending)", func(t *testing.T) {
-			checkSeq(t, "ascending", false, "data", "data", inStrings, []interface{}{"1000", "200", "30", "4"})
+			checkSeq(t, "ascending", false, "payload.data", "data", inStrings, []interface{}{"1000", "200", "30", "4"})
 		})
 
 		s.it("should sort payload (elem, not number, descending)", func(t *testing.T) {
@@ -185,7 +188,7 @@ func TestSortSpec(t *testing.T) {
 			checkSeq(t, "descending", false, "payload", "payload", inStrings, []interface{}{"4", "30", "200", "1000"})
 		})
 		s.it("should sort message group/prop (not number, descending)", func(t *testing.T) {
-			checkSeq(t, "descending", false, "data", "data", inStrings, []interface{}{"4", "30", "200", "1000"})
+			checkSeq(t, "descending", false, "payload.data", "data", inStrings, []interface{}{"4", "30", "200", "1000"})
 		})
 
 		s.it("should sort payload (elem, number, ascending)", func(t *testing.T) {
@@ -198,7 +201,7 @@ func TestSortSpec(t *testing.T) {
 			checkSeq(t, "ascending", true, "payload", "payload", inStrings, []interface{}{"4", "30", "200", "1000"})
 		})
 		s.it("should sort message group/prop (number, ascending)", func(t *testing.T) {
-			checkSeq(t, "ascending", true, "data", "data", inStrings, []interface{}{"4", "30", "200", "1000"})
+			checkSeq(t, "ascending", true, "payload.data", "data", inStrings, []interface{}{"4", "30", "200", "1000"})
 		})
 
 		s.it("should sort payload (elem, number, descending)", func(t *testing.T) {
@@ -211,7 +214,7 @@ func TestSortSpec(t *testing.T) {
 			checkSeq(t, "descending", true, "payload", "payload", inStrings, []interface{}{"1000", "200", "30", "4"})
 		})
 		s.it("should sort message group/prop (number, descending)", func(t *testing.T) {
-			checkSeq(t, "descending", true, "data", "data", inStrings, []interface{}{"1000", "200", "30", "4"})
+			checkSeq(t, "descending", true, "payload.data", "data", inStrings, []interface{}{"1000", "200", "30", "4"})
 		})
 
 		s.it("should sort payload (exp, not number, ascending)", func(t *testing.T) {

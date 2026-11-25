@@ -146,11 +146,16 @@ func TestXMLRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected user map, got %#v", root["user"])
 	}
-	if user["@id"] != "7" {
-		t.Fatalf("expected @id=7, got %v", user["@id"])
+	// Node-RED's xml2js shape stores attributes under "$" and children
+	// in arrays by default. (nodebase XML parity change; the former
+	// @attr/collapsed-child shape was engine-specific.)
+	attrs, ok := user["$"].(map[string]interface{})
+	if !ok || attrs["id"] != "7" {
+		t.Fatalf("expected $ attrs id=7, got %v", user["$"])
 	}
-	if user["name"] != "Ada" {
-		t.Fatalf("expected name=Ada, got %v", user["name"])
+	names, ok := user["name"].([]interface{})
+	if !ok || len(names) != 1 || names[0] != "Ada" {
+		t.Fatalf("expected name=[Ada], got %v", user["name"])
 	}
 	tags, ok := user["tag"].([]interface{})
 	if !ok || len(tags) != 2 {
@@ -167,7 +172,9 @@ func TestXMLRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected XML string, got %T", out2.GetPayload())
 	}
-	for _, want := range []string{`<user id="7">`, `<name>Ada</name>`, `<tag>go</tag>`, `<tag>flow</tag>`, `</user>`} {
+	// xml2js Builder wraps marshalled objects in its root element even
+	// when the object itself came from a named XML root.
+	for _, want := range []string{`<root><user id="7">`, `<name>Ada</name>`, `<tag>go</tag>`, `<tag>flow</tag>`, `</user></root>`} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("marshalled XML missing %q: %s", want, s)
 		}

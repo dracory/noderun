@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	_ "github.com/dracory/nodebase/builtin"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"io"
 	"net"
 	"net/http"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
-	_ "github.com/dracory/nodebase/builtin"
 	"testing"
 	"time"
 )
@@ -70,7 +70,7 @@ func TestHTTPTriggerFlow(t *testing.T) {
 	defer func() { _ = engine.StopWorkflow(workflow.GetID()) }()
 
 	// Wait until the trigger listener is accepting connections
-	url := fmt.Sprintf("http://127.0.0.1:%d/go", port)
+	url := fmt.Sprintf("http://127.0.0.1:%d/go?probe=1", port)
 	var resp *http.Response
 	var err error
 	deadline := time.Now().Add(3 * time.Second)
@@ -96,10 +96,10 @@ func TestHTTPTriggerFlow(t *testing.T) {
 		t.Fatalf("response is not JSON: %v\nbody: %s", err, body)
 	}
 
-	// The body must be the injected request payload (requestData),
-	// which proves the httpResponse node resolved the request.
-	if _, ok := data["method"]; !ok {
-		t.Fatalf("expected injected request payload in response, got: %s", body)
+	// The body must be the injected GET payload (Node-RED's query
+	// object), which proves the httpResponse node resolved the request.
+	if data["probe"] != "1" {
+		t.Fatalf("expected injected query payload in response, got: %s", body)
 	}
 }
 

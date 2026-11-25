@@ -2,6 +2,7 @@ package noderunner_test
 
 import (
 	. "github.com/dracory/noderun"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,23 +21,31 @@ func TestDelaySpec(t *testing.T) {
 				Nodes: []Node{
 					{ID: "inj", Type: "inject", Data: map[string]interface{}{}},
 					{ID: "dly", Type: "delay", Data: map[string]interface{}{"duration": 150}},
-					specResponseNode("resp"),
+					specDebugNode("dbg"),
 				},
 				Edges: []Edge{
 					{ID: "e1", Source: "inj", Target: "dly"},
-					{ID: "e2", Source: "dly", Target: "resp"},
+					{ID: "e2", Source: "dly", Target: "dbg"},
 				},
 			}
 			engine := specDeployFlow(t, wf)
 			start := time.Now()
-			ch := specInjectInto(t, engine, wf.ID, "inj", &Message{
+			// The rewritten delay node follows Node-RED's asynchronous
+			// hold-and-release model: the input traversal ends at the delay
+			// node and the held message is emitted later by a timer. The
+			// upstream spec observes that downstream emission; it is not an
+			// HTTP request/response correlation test.
+			msgID, _, err := engine.InjectMessage(wf.ID, "inj", &Message{
 				Payload:   "wait",
 				Timestamp: time.Now(),
 			})
-			out := specAwaitResponse(t, ch, 3*time.Second)
-			if out.GetPayload() != "wait" {
-				t.Fatalf("payload changed in transit: %#v", out.GetPayload())
+			if err != nil {
+				t.Fatalf("inject failed: %v", err)
 			}
+			defer engine.DiscardPending(msgID)
+			specAwaitEvent(t, engine, wf.ID, func(ev NodeEvent) bool {
+				return ev.NodeID == "dbg" && strings.Contains(ev.Message, "wait")
+			}, 3*time.Second)
 			if elapsed := time.Since(start); elapsed < 140*time.Millisecond {
 				t.Fatalf("message not delayed: %s", elapsed)
 			}

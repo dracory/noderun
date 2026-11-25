@@ -3,10 +3,10 @@ package noderunner
 import (
 	"context"
 	"encoding/base64"
+	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 	"os"
 	"path/filepath"
-	nodestore "github.com/dracory/nodestore"
-	"github.com/dracory/nodebase"
 	"strings"
 	"testing"
 )
@@ -114,18 +114,22 @@ func TestFileInLines(t *testing.T) {
 		t.Fatal("fileIn does not implement nodebase.MessageExpander")
 	}
 	msgs := expander.Expand(out)
-	if len(msgs) != 3 {
-		t.Fatalf("expected 3 messages, got %d", len(msgs))
+	// Node-RED fileIn lines mode emits the trailing empty segment produced
+	// by a final newline, and tags the sequence as type "string" so join
+	// rebuilds text with parts.ch. (nodebase fileIn parity change.)
+	wantLines := []string{"a", "b", "c", ""}
+	if len(msgs) != len(wantLines) {
+		t.Fatalf("expected %d messages, got %d", len(wantLines), len(msgs))
 	}
 	for i, m := range msgs {
-		if m.GetPayload() != []string{"a", "b", "c"}[i] {
-			t.Fatalf("msg %d: expected %q, got %v", i, "abc"[i:i+1], m.GetPayload())
+		if m.GetPayload() != wantLines[i] {
+			t.Fatalf("msg %d: expected %q, got %v", i, wantLines[i], m.GetPayload())
 		}
 		parts, ok := m.GetMetadata()["parts"].(map[string]interface{})
 		if !ok {
 			t.Fatalf("msg %d missing parts metadata", i)
 		}
-		if parts["index"] != i || parts["count"] != 3 || parts["type"] != "lines" || parts["ch"] != "\n" {
+		if parts["index"] != i || parts["count"] != len(wantLines) || parts["type"] != "string" || parts["ch"] != "\n" {
 			t.Fatalf("msg %d bad parts: %v", i, parts)
 		}
 		if m.GetMetadata()["filename"] != target {

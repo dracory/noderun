@@ -2,10 +2,96 @@ package noderunner_test
 
 import (
 	"context"
-	. "github.com/dracory/noderun"
+	"crypto/tls"
+	"net/http"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/dracory/nodebase"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 )
+
+// sequenceCaptureHost is a minimal NodeHost for direct sequence-node
+// tests. Node-RED batch/sort nodes re-emit completed groups as multiple
+// parts-tagged messages through ExecuteDownstream rather than returning
+// one array from Execute, so the host capture is the meaningful output.
+type sequenceCaptureHost struct {
+	states  map[string]interface{}
+	mu      sync.Mutex
+	emitted []nodestore.MessageInterface
+}
+
+func newSequenceCaptureHost() *sequenceCaptureHost {
+	return &sequenceCaptureHost{states: map[string]interface{}{}}
+}
+
+func (h *sequenceCaptureHost) Emit(wf, nodeID string, p nodestore.MessageInterface, ports []string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.emitted = append(h.emitted, p)
+	return nil
+}
+func (h *sequenceCaptureHost) EmitEvent(wf, nodeID, name, level, message string) {}
+func (h *sequenceCaptureHost) InjectMessage(wf, from string, p nodestore.MessageInterface) (string, chan nodestore.MessageInterface, error) {
+	return "", nil, nil
+}
+func (h *sequenceCaptureHost) ResolveResponse(id string, p nodestore.MessageInterface) error {
+	return nil
+}
+func (h *sequenceCaptureHost) DiscardPending(id string) {}
+func (h *sequenceCaptureHost) LookupNode(wf, nodeID string) (nodestore.NodeInterface, bool) {
+	return nil, false
+}
+func (h *sequenceCaptureHost) RunningFlow(wf string) (nodestore.WorkflowInterface, bool) {
+	return nodestore.NewWorkflow("wf"), true
+}
+func (h *sequenceCaptureHost) RunContext(wf string) context.Context { return context.Background() }
+func (h *sequenceCaptureHost) GetOrCreateNodeState(wf, nodeID string, factory func() interface{}) interface{} {
+	key := wf + "/" + nodeID
+	if state, ok := h.states[key]; ok {
+		return state
+	}
+	state := factory()
+	h.states[key] = state
+	return state
+}
+func (h *sequenceCaptureHost) ExecuteDownstream(ctx context.Context, wf, from string, workflow nodestore.WorkflowInterface, p nodestore.MessageInterface, ports []string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.emitted = append(h.emitted, p)
+}
+func (h *sequenceCaptureHost) NodeEnv(wf, nodeID, name string) (interface{}, bool) {
+	return nil, false
+}
+func (h *sequenceCaptureHost) ResolvedContextStore() nodebase.ContextStore { return nil }
+func (h *sequenceCaptureHost) LoadTLSConfig(wf, ref string) (*tls.Config, error) {
+	return nil, nil
+}
+func (h *sequenceCaptureHost) FileRootPath() string                  { return "" }
+func (h *sequenceCaptureHost) ExecAllowed() bool                     { return false }
+func (h *sequenceCaptureHost) SharedHTTPRouter() nodebase.HTTPRouter { return nil }
+func (h *sequenceCaptureHost) HTTPAuthFunc() func(*http.Request) (string, bool) {
+	return nil
+}
+func (h *sequenceCaptureHost) QueueService() nodebase.QueueService { return nil }
+
+func (h *sequenceCaptureHost) emittedMessages() []nodestore.MessageInterface {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]nodestore.MessageInterface(nil), h.emitted...)
+}
+
+func (h *sequenceCaptureHost) waitForMessages(count int, timeout time.Duration) []nodestore.MessageInterface {
+	deadline := time.Now().Add(timeout)
+	for len(h.emittedMessages()) < count && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	return h.emittedMessages()
+}
+
+var _ nodebase.NodeHost = (*sequenceCaptureHost)(nil)
 
 // partsMsg builds a payload carrying split-style parts metadata.
 func partsMsg(data interface{}, groupID string, index, count int) *Message {
@@ -107,63 +193,57 @@ func TestJoinAutoArray(t *testing.T) {
 	}
 }
 
-// TestJoinAutoNoParts verifies auto mode passes through messages
-// lacking parts metadata.
+// TestJoinAutoNoParts verifies auto mode drops messages lacking parts
+// metadata. Node-RED warns "cannot join in 'auto' mode" and does not
+// pass them through. (nodebase join parity change.)
 func TestJoinAutoNoParts(t *testing.T) {
 	engine := NewEngine()
 	node := NewJoinNode("j", &JoinConfig{}, engine, "wf")
 	in := &Message{Payload: "solo"}
 	out, err := node.Execute(context.Background(), in)
-	if err != nil || out != in {
-		t.Fatalf("expected passthrough, got out=%v err=%v", out, err)
+	if err != nil || out != nil {
+		t.Fatalf("expected no-parts message to be dropped, got out=%v err=%v", out, err)
 	}
 }
 
-// TestJoinCustomCount verifies custom mode groups by a key path and
-// flushes at the configured count.
+// TestJoinCustomCount verifies custom mode flushes at the configured
+// count. Node-RED does not partition custom groups by key/topic: key is
+// only the object-build key selector, so the second message completes
+// the group even when its topic differs. Message property paths also
+// follow Node-RED semantics — payload fields are addressed as
+// "payload.<field>". (nodebase join parity change.)
 func TestJoinCustomCount(t *testing.T) {
 	engine := NewEngine()
 	node := NewJoinNode("j", &JoinConfig{
-		Mode:   "custom",
-		Key:    "topic",
-		Count:  2,
-		Build:  "string",
-		Joiner: ",",
+		Mode:     "custom",
+		Key:      "topic",
+		Property: "payload.val",
+		Count:    2,
+		Build:    "string",
+		Joiner:   ",",
 	}, engine, "wf")
 
 	msg := func(topic, val string) *Message {
-		return &Message{Payload: map[string]interface{}{"topic": topic, "val": val}}
+		return &Message{
+			Payload:  map[string]interface{}{"val": val},
+			Metadata: map[string]interface{}{"topic": topic},
+		}
 	}
 
 	out, _ := node.Execute(context.Background(), msg("x", "1"))
 	if out != nil {
 		t.Fatalf("first message should be dropped, got %v", out)
 	}
-	out, _ = node.Execute(context.Background(), msg("y", "other"))
-	if out != nil {
-		t.Fatalf("different topic must not complete the group, got %v", out)
-	}
-	// property defaults to "payload" → joined value is the whole data map;
-	// use property "val" instead so the string join reads the field.
-	node = NewJoinNode("j2", &JoinConfig{
-		Mode:     "custom",
-		Key:      "topic",
-		Property: "val",
-		Count:    2,
-		Build:    "string",
-		Joiner:   ",",
-	}, engine, "wf")
-	out, _ = node.Execute(context.Background(), msg("x", "1"))
-	if out != nil {
-		t.Fatalf("first message should be dropped, got %v", out)
-	}
-	out, err := node.Execute(context.Background(), msg("x", "2"))
+	out, err := node.Execute(context.Background(), msg("y", "2"))
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
+	if out == nil {
+		t.Fatal("second message should complete the shared custom group despite a different topic")
+	}
 	m, ok := out.GetPayload().(map[string]interface{})
 	if !ok || m["val"] != "1,2" {
-		t.Fatalf("expected joined string \"1,2\" at val, got %v", out.GetPayload())
+		t.Fatalf("expected joined string \"1,2\" at payload.val, got %v", out.GetPayload())
 	}
 }
 
@@ -221,11 +301,13 @@ func TestJoinCustomTimeout(t *testing.T) {
 	t.Fatalf("timeout flush never reached log; statuses=%v events=%v", nodes, events)
 }
 
-// TestBatchCount verifies count mode emits one message per batch and
-// keeps the remainder buffered.
+// TestBatchCount verifies count mode re-emits a completed batch as a
+// parts-tagged sequence through the downstream host and keeps the
+// remainder buffered. Node-RED does not return one array message from
+// Execute. (nodebase batch parity change.)
 func TestBatchCount(t *testing.T) {
-	engine := NewEngine()
-	node := NewBatchNode("b", &BatchConfig{Mode: "count", Count: 2}, engine, "wf")
+	host := newSequenceCaptureHost()
+	node := NewBatchNode("b", &BatchConfig{Mode: "count", Count: 2}, host, "wf")
 
 	in := func(v int) *Message {
 		return &Message{Payload: v}
@@ -239,53 +321,99 @@ func TestBatchCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
-	arr, ok := out.GetPayload().([]interface{})
-	if !ok || len(arr) != 2 || arr[0] != 1 || arr[1] != 2 {
-		t.Fatalf("expected batch [1 2], got %v", out.GetPayload())
+	if out != nil {
+		t.Fatalf("completing message should also be dropped, got %v", out)
 	}
-	// Third message starts a new incomplete batch
+	emitted := host.waitForMessages(2, 2*time.Second)
+	if len(emitted) != 2 || emitted[0].GetPayload() != 1 || emitted[1].GetPayload() != 2 {
+		t.Fatalf("expected emitted sequence [1 2], got %v", emitted)
+	}
+	for i, msg := range emitted {
+		parts, ok := msg.GetMetadata()["parts"].(map[string]interface{})
+		if !ok || parts["index"] != i || parts["count"] != 2 || parts["id"] == "" {
+			t.Fatalf("emitted message %d has bad parts metadata: %v", i, parts)
+		}
+	}
+	// Third message starts a new incomplete batch.
 	out, _ = node.Execute(context.Background(), in(3))
 	if out != nil {
 		t.Fatalf("remainder should stay buffered, got %v", out)
 	}
+	if got := len(host.emittedMessages()); got != 2 {
+		t.Fatalf("incomplete remainder emitted too early; total emitted=%d", got)
+	}
 }
 
 // TestBatchCountOverlap verifies overlap keeps trailing messages for
-// the next batch.
+// the next emitted parts sequence.
 func TestBatchCountOverlap(t *testing.T) {
-	engine := NewEngine()
-	node := NewBatchNode("b", &BatchConfig{Mode: "count", Count: 2, Overlap: 1}, engine, "wf")
+	host := newSequenceCaptureHost()
+	node := NewBatchNode("b", &BatchConfig{Mode: "count", Count: 2, Overlap: 1}, host, "wf")
 
 	in := func(v int) *Message {
 		return &Message{Payload: v}
 	}
 
-	node.Execute(context.Background(), in(1))
-	out, _ := node.Execute(context.Background(), in(2)) // batch [1 2], keeps [2]
-	if out == nil {
-		t.Fatal("expected first batch")
+	for _, v := range []int{1, 2, 3} {
+		out, err := node.Execute(context.Background(), in(v))
+		if err != nil || out != nil {
+			t.Fatalf("input %d should be dropped while batching: out=%v err=%v", v, out, err)
+		}
 	}
-	out, _ = node.Execute(context.Background(), in(3)) // batch [2 3]
-	arr, ok := out.GetPayload().([]interface{})
-	if !ok || len(arr) != 2 || arr[0] != 2 || arr[1] != 3 {
-		t.Fatalf("expected overlapped batch [2 3], got %v", out.GetPayload())
+	emitted := host.waitForMessages(4, 2*time.Second)
+	if len(emitted) != 4 {
+		t.Fatalf("expected two 2-message sequences, got %d messages", len(emitted))
+	}
+	want := []int{1, 2, 2, 3}
+	for i, msg := range emitted {
+		if msg.GetPayload() != want[i] {
+			t.Fatalf("emitted payload %d: expected %d, got %v", i, want[i], msg.GetPayload())
+		}
 	}
 }
 
-// TestBatchConcat verifies concat mode flattens a parts sequence into
-// one message.
+// TestBatchConcat verifies concat mode concatenates complete topic
+// sequences and re-emits their messages as one parts sequence; it does
+// not flatten their payloads into one array. (nodebase batch parity
+// change.)
 func TestBatchConcat(t *testing.T) {
-	engine := NewEngine()
-	node := NewBatchNode("b", &BatchConfig{Mode: "concat"}, engine, "wf")
+	host := newSequenceCaptureHost()
+	node := NewBatchNode("b", &BatchConfig{
+		Mode: "concat",
+		Topics: []struct {
+			Topic string `json:"topic"`
+		}{{Topic: "t"}},
+	}, host, "wf")
 
-	node.Execute(context.Background(), partsMsg([]interface{}{1, 2}, "g", 0, 2))
-	out, err := node.Execute(context.Background(), partsMsg([]interface{}{3}, "g", 1, 2))
+	first := partsMsg([]interface{}{1, 2}, "g", 0, 2)
+	first.Metadata["topic"] = "t"
+	second := partsMsg([]interface{}{3}, "g", 1, 2)
+	second.Metadata["topic"] = "t"
+	if out, err := node.Execute(context.Background(), first); err != nil || out != nil {
+		t.Fatalf("first concat message should buffer: out=%v err=%v", out, err)
+	}
+	out, err := node.Execute(context.Background(), second)
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
-	arr, ok := out.GetPayload().([]interface{})
-	if !ok || len(arr) != 3 {
-		t.Fatalf("expected concatenated array of 3, got %v", out.GetPayload())
+	if out != nil {
+		t.Fatalf("completing concat message should be dropped, got %v", out)
+	}
+	emitted := host.waitForMessages(2, 2*time.Second)
+	if len(emitted) != 2 {
+		t.Fatalf("expected the two input messages re-emitted as a sequence, got %d", len(emitted))
+	}
+	if got, ok := emitted[0].GetPayload().([]interface{}); !ok || len(got) != 2 {
+		t.Fatalf("first payload should remain the two-element chunk, got %v", emitted[0].GetPayload())
+	}
+	if got, ok := emitted[1].GetPayload().([]interface{}); !ok || len(got) != 1 {
+		t.Fatalf("second payload should remain the one-element chunk, got %v", emitted[1].GetPayload())
+	}
+	for i, msg := range emitted {
+		parts, ok := msg.GetMetadata()["parts"].(map[string]interface{})
+		if !ok || parts["index"] != i || parts["count"] != 2 {
+			t.Fatalf("concatenated message %d has bad parts metadata: %v", i, parts)
+		}
 	}
 }
 
