@@ -465,15 +465,31 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 	// delays and join timeouts also flush on wall-clock timers (the
 	// oracle's real-time recording captures them), so widen the settle
 	// window when a flow uses them.
+	//
+	// Timer-driven nodes (trigger durations, delay holds) are mirrored
+	// at the recorder's own capture window: the oracle contains
+	// trigger/01's 2s release but not delay/01's 3s one, so the
+	// recorder waited roughly 2-3s after the last inject — settle for
+	// 2.5s matches what real Node-RED was observed doing inside that
+	// window. Longer configured holds (delay/03's minute, delay/02's
+	// 10s msg.delay) stay unreleased exactly as they did during the
+	// recording.
 	settle := 500 * time.Millisecond
+	widen := func(d time.Duration) {
+		if d > settle {
+			settle = d
+		}
+	}
 	for _, n := range nodes {
 		switch n["type"] {
 		case "watch":
-			settle = 2500 * time.Millisecond
+			widen(2500 * time.Millisecond)
+		case "trigger", "delay":
+			widen(2500 * time.Millisecond)
 		case "join":
 			if to, ok := n["timeout"]; ok {
 				if f, err := strconv.ParseFloat(fmt.Sprint(to), 64); err == nil && f > 0 {
-					settle = 8 * time.Second
+					widen(8 * time.Second)
 				}
 			}
 		}
