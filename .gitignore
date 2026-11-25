@@ -32,3 +32,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Fetched upstream Node-RED example flows (fetched, not committed — Apache-2.0)
+testdata/nodered-examples/
