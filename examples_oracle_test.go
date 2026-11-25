@@ -141,11 +141,6 @@ var oracleFlowDifferences = map[string]string{
 	"function/switch/05 - Use JSONata for switch rule.json":        "switch rule uses jsonata_exp — no JSONata support",
 	"network/tcp/03 - Send reply to client of TCP connection.json": "change rule uses tot:\"jsonata\" — no JSONata support",
 
-	// --- env vars / flow & global context (deploy-fails loud) ---
-	"function/change/04 - Set value from env var.json":               "change rule reads process env (tot:\"env\") — not supported",
-	"function/change/05 - Set flow context.json":                     "change rule writes flow context — change/switch rules only see msg",
-	"function/switch/09 - Route message based on context value.json": "change rule writes flow context — not supported",
-
 	// --- function node (goja) gaps ---
 	"function/function/02 - Send multiple messages.json":       "Node-RED array-on-output semantics (array per output port) not implemented",
 	"function/function/03 - Send messages asynchronously.json": "async done()/node.send() semantics not implemented",
@@ -154,10 +149,9 @@ var oracleFlowDifferences = map[string]string{
 	"function/function/10 - Asynchronous setup.json":           "function node async setup lifecycle not implemented",
 
 	// --- switch / range evaluation semantics ---
-	"function/switch/02 - Check all rules.json":                   "\"check all\" mode output semantics diverge",
-	"function/switch/06 - Use JSONata for switch value.json":      "odd/even routing via boolean rule diverges",
-	"function/switch/07 - Recreate message sequence.json":         "message-sequence (parts) recreation not implemented",
-	"function/switch/08 - Route message based on properties.json": "multi-property routing diverges",
+	"function/switch/02 - Check all rules.json":              "\"check all\" mode output semantics diverge",
+	"function/switch/06 - Use JSONata for switch value.json": "odd/even routing via boolean rule diverges",
+	"function/switch/07 - Recreate message sequence.json":    "message-sequence (parts) recreation not implemented",
 
 	// --- delay timing semantics ---
 	"function/delay/01 - Delay message.json":                     "delay timing window exceeds oracle capture window",
@@ -394,7 +388,12 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	// "env"-typed rule values read the process environment like real
+	// Node-RED does; the recorder ran inside the Node-RED container
+	// where HOME resolves to the install dir, so reproduce that here.
+	t.Setenv("HOME", "/usr/src/node-red")
 	engine := NewWorkflowEngine()
+	engine.AllowOSEnv = true
 	engine.HTTPRouter = router
 	// DeployWorkflow waits for activation — inject executors must be
 	// live before FireInjectNode can find them.
@@ -413,6 +412,11 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 		if err := engine.FireInjectNode(w.GetID(), imp); err != nil {
 			return fail("inject %s in %s: %v", id, of.File, err)
 		}
+		// Traversals run in the background; the recorder clicked
+		// injects seconds apart, so let each one settle before firing
+		// the next — back-to-back fires would race on shared flow
+		// context.
+		time.Sleep(100 * time.Millisecond)
 	}
 	// Watch nodes report filesystem changes asynchronously — give them
 	// a wider settle window than message-driven flows need.
