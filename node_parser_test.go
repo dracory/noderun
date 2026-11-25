@@ -2,8 +2,8 @@ package noderunner_test
 
 import (
 	"context"
-	. "github.com/dracory/noderun"
 	"github.com/dracory/nodebase"
+	. "github.com/dracory/noderun"
 	"strings"
 	"testing"
 )
@@ -204,7 +204,8 @@ func TestCSVParseRows(t *testing.T) {
 		}
 	}
 	first := rows[0].GetPayload().(map[string]interface{})
-	if first["name"] != "Ada" || first["age"] != "36" {
+	// numeric-looking cells coerce to numbers (strings defaults true)
+	if first["name"] != "Ada" || first["age"] != float64(36) {
 		t.Fatalf("unexpected first row: %v", first)
 	}
 	if partField(t, rows[0], "id") != partField(t, rows[1], "id") {
@@ -212,8 +213,8 @@ func TestCSVParseRows(t *testing.T) {
 	}
 }
 
-// TestCSVParseNoHeaders verifies rows become string slices without
-// headers.
+// TestCSVParseNoHeaders verifies rows become objects keyed by
+// generated col1..colN names when no header or template is set.
 func TestCSVParseNoHeaders(t *testing.T) {
 	node := NewCSVNode("c2", &CSVConfig{})
 
@@ -226,16 +227,16 @@ func TestCSVParseNoHeaders(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	r0, ok := rows[0].GetPayload().([]string)
-	if !ok || len(r0) != 2 || r0[0] != "1" {
+	r0, ok := rows[0].GetPayload().(map[string]interface{})
+	if !ok || r0["col1"] != float64(1) || r0["col2"] != float64(2) {
 		t.Fatalf("unexpected row data: %#v", rows[0].GetPayload())
 	}
 }
 
 // TestCSVSerialize verifies arrays of maps/rows serialize to CSV with
-// a header row.
+// a header row when hdrout requests one.
 func TestCSVSerialize(t *testing.T) {
-	node := NewCSVNode("c3", &CSVConfig{Headers: true})
+	node := NewCSVNode("c3", &CSVConfig{HdrOut: "all"})
 
 	input := &Message{Payload: []interface{}{
 		map[string]interface{}{"name": "Ada", "age": "36"},

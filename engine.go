@@ -1051,6 +1051,26 @@ func (e *WorkflowEngine) LookupNode(workflowID, nodeID string) (nodestore.NodeIn
 	return nodestore.NewNode("", ""), false
 }
 
+// LookupNodeForConfig resolves a config-node reference (mqttBroker,
+// tlsConfig, …) from an executor at run time, returning the node with
+// its injected credentials intact — unlike LookupNode, which masks
+// them for admin surfaces. Internal seam only; never expose the result
+// through status or inspection APIs.
+func (e *WorkflowEngine) LookupNodeForConfig(workflowID, nodeID string) (nodestore.NodeInterface, bool) {
+	e.runMu.Lock()
+	defer e.runMu.Unlock()
+	workflow, ok := e.flows[workflowID]
+	if !ok {
+		return nodestore.NewNode("", ""), false
+	}
+	for _, node := range workflow.GetNodes() {
+		if node.GetID() == nodeID {
+			return node, true
+		}
+	}
+	return nodestore.NewNode("", ""), false
+}
+
 // GetNodeState returns the buffered state stored for a node within a
 // workflow (nil when none was stored yet). Stateful executors (join,
 // sort, batch) are rebuilt per message so their buffers live here.

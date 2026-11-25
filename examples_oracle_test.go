@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -176,6 +177,18 @@ var oracleDifferences = []oracleDifference{
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
 	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:14:20(64)",
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
+
+	// --- structured parsers: object key order is unrecoverable ---
+	// xml/yaml serialize from unordered Go maps (children emit sorted);
+	// Node-RED keeps JavaScript object insertion order.
+	{File: "parser/xml/01 - Convert JavaScript object to XML.json", Node: "1cd4ad02.9a5423", Msg: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><root><kind>Apple</kind><price>100</price><origin>Canada</origin></root>`,
+		Note: "oracle-side residual: Node-RED serializes object keys in insertion order"},
+	{File: "parser/xml/01 - Convert JavaScript object to XML.json", Node: "1cd4ad02.9a5423", Msg: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><root><kind>Apple</kind><origin>Canada</origin><price>100</price></root>`,
+		Note: "actual-side residual: payload is an unordered Go map — children emit sorted"},
+	{File: "parser/yaml/01 - Convert JavaScript object to YAML.json", Node: "1cd4ad02.9a5423", Msg: "fruits:\n  kind: Apple\n  price: 100\n  origin: Canada\n",
+		Note: "oracle-side residual: js-yaml serializes object keys in insertion order"},
+	{File: "parser/yaml/01 - Convert JavaScript object to YAML.json", Node: "1cd4ad02.9a5423", Msg: "fruits:\n  kind: Apple\n  origin: Canada\n  price: 100\n",
+		Note: "actual-side residual: payload is an unordered Go map — yaml.v3 emits keys sorted"},
 }
 
 // oracleFlowDifferences accepts divergence for a whole flow file —
@@ -197,25 +210,8 @@ var oracleFlowDifferences = map[string]string{
 	"function/function/09 - Setup and close.json":              "function node setup/close lifecycle not implemented",
 	"function/function/10 - Asynchronous setup.json":           "function node async setup lifecycle not implemented",
 
-	// --- switch / range evaluation semantics ---
-	"function/switch/02 - Check all rules.json":              "\"check all\" mode output semantics diverge",
-	"function/switch/06 - Use JSONata for switch value.json": "odd/even routing via boolean rule diverges",
-	"function/switch/07 - Recreate message sequence.json":    "message-sequence (parts) recreation not implemented",
-
-	// --- delay timing semantics ---
-	"function/delay/01 - Delay message.json":                     "delay timing window exceeds oracle capture window",
-	"function/delay/02 - Delay message by message property.json": "msg.delay timing semantics diverge",
-	"function/delay/03 - Reset or flush pending message.json":    "delay reset/flush semantics diverge",
-
-	// --- template formatting diffs ---
-	"function/template/01 - Use mustache syntax.json":  "mustache rendering whitespace/output differs",
-	"function/template/02 - Parse result as JSON.json": "JSON parse of rendered template diverges",
-	"function/template/03 - Parse result as YAML.json": "YAML parse of rendered template diverges",
-
 	// --- misc deploy gaps ---
-	"function/trigger/01 - Outputs two value with interval.json":                               "NR serializes bytopic as \"all\" string — enum-valued bool not coerced",
-	"network/websocket/02 - Connect to websocket out server.json":                              "websocket-client/websocket-listener config node types not registered",
-	"parser/html/03 - Extract array of HTML element by CSS selector specified in message.json": "html selector from msg not supported (config requires tag)",
+	"network/websocket/02 - Connect to websocket out server.json": "websocket-client/websocket-listener config node types not registered",
 
 	// --- live-network flows (real sockets/HTTP round-trips) ---
 	// http/tcp/udp flows drive real listeners and round-trips via the
@@ -230,30 +226,6 @@ var oracleFlowDifferences = map[string]string{
 	// --- link nodes ---
 	"common/link/02 - Link across tabs.json": "link across tabs routing not implemented",
 	"common/link/03 - Link call.json":        "linkCall return-value semantics diverge",
-
-	// --- csv parser ---
-	"parser/csv/01 - Parse CSV with default column name as message sequence.json":             "CSV message-sequence emission semantics diverge",
-	"parser/csv/02 - Parse CSV with default column name as array.json":                        "CSV array output format diverges",
-	"parser/csv/03 - Parse CSV with specified column name as message sequence.json":           "CSV named-column sequence diverges",
-	"parser/csv/04 - Parse CSV with column name in first row as message sequence.json":        "CSV header-row column names diverge",
-	"parser/csv/05 - Convert JavaScript object to CSV.json":                                   "object-to-CSV column selection diverges",
-	"parser/csv/06 - Convert JavaScript object to CSV.json":                                   "object-to-CSV column selection diverges",
-	"parser/csv/07 - Convert array of JavaScript objects to CSV with column name header.json": "CSV header output diverges",
-	"parser/csv/08 - Specify column names in input message.json":                              "msg-provided column names diverge",
-	"parser/csv/09 - Send column name when reset property set.json":                           "CSV reset-property column emission diverges",
-	"parser/csv/10 - Join parsed CSV message sequence using join node.json":                   "CSV+join sequence semantics diverge",
-
-	// --- html parser ---
-	"parser/html/01 - Extract array of HTML element by CSS selector.json":           "html extraction output shape diverges (elements vs text)",
-	"parser/html/02 - Extract sequence of HTML element by CSS selector.json":        "html sequence extraction diverges",
-	"parser/html/04 - Join extracted sequence of HTML element using join node.json": "html+join sequence diverges",
-
-	// --- structured parsers ---
-	"parser/json/03 - Validate input JSON string.json":               "json schema validation not implemented",
-	"parser/xml/01 - Convert JavaScript object to XML.json":          "object-to-XML serialization diverges",
-	"parser/xml/02 - Convert XML to JavaScript object.json":          "XML-to-object conversion diverges",
-	"parser/xml/03 - Control conversion using options property.json": "msg-controlled XML options diverge",
-	"parser/yaml/01 - Convert JavaScript object to YAML.json":        "object-to-YAML serialization diverges",
 
 	// --- sequence nodes ---
 
@@ -489,11 +461,21 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 		time.Sleep(100 * time.Millisecond)
 	}
 	// Watch nodes report filesystem changes asynchronously — give them
-	// a wider settle window than message-driven flows need.
+	// a wider settle window than message-driven flows need. Rate-limited
+	// delays and join timeouts also flush on wall-clock timers (the
+	// oracle's real-time recording captures them), so widen the settle
+	// window when a flow uses them.
 	settle := 500 * time.Millisecond
 	for _, n := range nodes {
-		if n["type"] == "watch" {
+		switch n["type"] {
+		case "watch":
 			settle = 2500 * time.Millisecond
+		case "join":
+			if to, ok := n["timeout"]; ok {
+				if f, err := strconv.ParseFloat(fmt.Sprint(to), 64); err == nil && f > 0 {
+					settle = 8 * time.Second
+				}
+			}
 		}
 	}
 	time.Sleep(settle)

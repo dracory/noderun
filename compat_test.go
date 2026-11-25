@@ -431,7 +431,7 @@ func NewBatchNode(id string, config *BatchConfig, engine nodebase.NodeHost, work
 }
 
 func NewCSVNode(id string, config *CSVConfig) *csvnode.CSVNode {
-	return csvnode.NewCSVNode(stNode(id, "csv", ""), config)
+	return csvnode.NewCSVNode(stNode(id, "csv", ""), config, nil)
 }
 
 func NewChangeNode(id string, config *ChangeConfig) *changenode.ChangeNode {
