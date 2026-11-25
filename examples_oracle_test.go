@@ -133,6 +133,30 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) []oracleDebugEvent 
 	if err != nil {
 		t.Fatalf("read %s: %v", of.File, err)
 	}
+	// Example files contain no tab nodes — without them ImportNodeRED
+	// regenerates node ids, which would make oracle node ids
+	// unmatchable. Synthesize one tab per distinct z (same trick the
+	// recorder uses for POST /flows).
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(raw, &nodes); err != nil {
+		t.Fatalf("parse %s: %v", of.File, err)
+	}
+	seen := map[string]bool{}
+	for _, n := range nodes {
+		if n["type"] == "tab" {
+			continue
+		}
+		if z, _ := n["z"].(string); z != "" && !seen[z] {
+			seen[z] = true
+			nodes = append(nodes, map[string]interface{}{
+				"id": z, "type": "tab", "label": "example", "env": []interface{}{},
+			})
+		}
+	}
+	raw, err = json.Marshal(nodes)
+	if err != nil {
+		t.Fatalf("re-marshal %s: %v", of.File, err)
+	}
 	w, err := nodestore.ImportNodeRED(raw)
 	if err != nil {
 		t.Fatalf("import %s: %v", of.File, err)
