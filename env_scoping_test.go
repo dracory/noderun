@@ -203,7 +203,8 @@ func TestEnvScopingGroupSubflowInner(t *testing.T) {
 	_, events := waitForStatus(engine, workflow.ID, "dbg", "ok", 3*time.Second)
 	var seen bool
 	for _, ev := range events {
-		if ev.NodeID == "dbg" && strings.Contains(ev.Message, `"from-group"`) {
+		// Bare string: nodebase debug renders payloads without JSON quotes.
+		if ev.NodeID == "dbg" && strings.Contains(ev.Message, `from-group`) {
 			seen = true
 		}
 	}

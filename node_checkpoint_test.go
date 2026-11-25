@@ -3,9 +3,9 @@ package noderunner_test
 import (
 	"context"
 	"encoding/json"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	"github.com/dracory/nodebase"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )
@@ -119,7 +119,8 @@ func TestCheckpointParksAndRoutes(t *testing.T) {
 	for time.Now().Before(deadline) && len(debugValuesFor(engine, workflow.ID, "dbgA")) == 0 {
 		time.Sleep(15 * time.Millisecond)
 	}
-	if got := debugValuesFor(engine, workflow.ID, "dbgA"); len(got) != 1 || got[0] != `"job1"` {
+	// Bare string: nodebase debug renders payloads without JSON quotes.
+	if got := debugValuesFor(engine, workflow.ID, "dbgA"); len(got) != 1 || got[0] != `job1` {
 		t.Fatalf("expected approve release to dbgA, got %v", got)
 	}
 	time.Sleep(100 * time.Millisecond)
@@ -157,7 +158,8 @@ func TestCheckpointDeclineRoute(t *testing.T) {
 	for time.Now().Before(deadline) && len(debugValuesFor(engine, workflow.ID, "dbgB")) == 0 {
 		time.Sleep(15 * time.Millisecond)
 	}
-	if got := debugValuesFor(engine, workflow.ID, "dbgB"); len(got) != 1 || got[0] != `"job2"` {
+	// Bare string: nodebase debug renders payloads without JSON quotes.
+	if got := debugValuesFor(engine, workflow.ID, "dbgB"); len(got) != 1 || got[0] != `job2` {
 		t.Fatalf("expected decline release to dbgB, got %v", got)
 	}
 	if got := debugValuesFor(engine, workflow.ID, "dbgA"); len(got) != 0 {

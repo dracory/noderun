@@ -100,7 +100,8 @@ func TestFireInjectNodeConfiguredPayload(t *testing.T) {
 	for time.Now().Before(deadline) {
 		_, _, events, _ := engine.GetWorkflowSnapshot(workflow.ID, 0)
 		for _, ev := range events {
-			if ev.NodeID == "dbg" && strings.Contains(ev.Message, `"a": 1`) {
+			// Compact JSON: nodebase debug renders Node-RED-style.
+			if ev.NodeID == "dbg" && strings.Contains(ev.Message, `"a":1`) {
 				return
 			}
 		}

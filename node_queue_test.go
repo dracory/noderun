@@ -21,7 +21,9 @@ func TestQueueEnqueueDrains(t *testing.T) {
 	injectInto(t, engine, workflow.GetID(), "hello")
 
 	got := waitForDebugValues(engine, workflow.GetID(), 1, 3*time.Second)
-	if len(got) != 1 || got[0] != `"hello"` {
+	// nodebase debug node renders string payloads bare (no JSON
+	// quotes) for Node-RED parity.
+	if len(got) != 1 || got[0] != `hello` {
 		t.Fatalf("expected delivery of hello, got %v", got)
 	}
 	if n := store.RowCount(workflow.GetID()); n != 0 {
@@ -65,7 +67,8 @@ func TestQueueHoldRelease(t *testing.T) {
 
 	q.SetHold(false)
 	got := waitForDebugValues(engine, workflow.GetID(), 3, 3*time.Second)
-	want := []string{`"m1"`, `"m2"`, `"m3"`}
+	// Bare strings: nodebase debug renders payloads without JSON quotes.
+	want := []string{`m1`, `m2`, `m3`}
 	if len(got) != 3 {
 		t.Fatalf("expected 3 drained messages, got %v", got)
 	}
@@ -99,7 +102,8 @@ func TestQueueRestartRequeue(t *testing.T) {
 	t.Cleanup(func() { _ = engine.StopWorkflow(workflow.GetID()) })
 
 	got := waitForDebugValues(engine, workflow.GetID(), 3, 3*time.Second)
-	want := []string{`"r1"`, `"r2"`, `"r3"`}
+	// Bare strings: nodebase debug renders payloads without JSON quotes.
+	want := []string{`r1`, `r2`, `r3`}
 	if len(got) != 3 {
 		t.Fatalf("expected exactly 3 recovered deliveries (no duplicates), got %v", got)
 	}
@@ -175,7 +179,8 @@ func TestQueueDeleteAndRequeue(t *testing.T) {
 		t.Fatalf("requeue failed: %v", err)
 	}
 	got := waitForDebugValues(engine, workflow.GetID(), 1, 3*time.Second)
-	if len(got) != 1 || got[0] != `"b"` {
+	// Bare string: nodebase debug renders payloads without JSON quotes.
+	if len(got) != 1 || got[0] != `b` {
 		t.Fatalf("expected requeued b, got %v", got)
 	}
 	if q.Count() != 0 || store.RowCount(workflow.GetID()) != 0 {
@@ -208,7 +213,8 @@ func TestQueueDropOldest(t *testing.T) {
 	}
 	q.SetHold(false)
 	got := waitForDebugValues(engine, workflow.GetID(), 2, 3*time.Second)
-	if len(got) != 2 || got[0] != `"mid"` || got[1] != `"new"` {
+	// Bare strings: nodebase debug renders payloads without JSON quotes.
+	if len(got) != 2 || got[0] != `mid` || got[1] != `new` {
 		t.Fatalf("drop-oldest must evict the oldest item, got %v", got)
 	}
 }

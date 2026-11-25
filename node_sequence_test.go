@@ -173,7 +173,9 @@ func TestJoinCustomTimeout(t *testing.T) {
 		ID:   "test-join-timeout",
 		Name: "Join Timeout Flow",
 		Nodes: []Node{
-			{ID: "src", Type: "process", Data: map[string]interface{}{}},
+			// junction is the pass-through source; the placeholder
+			// "process" node type was removed from nodebase.
+			{ID: "src", Type: "junction", Data: map[string]interface{}{}},
 			{
 				ID:   "jn",
 				Type: "join",
@@ -351,7 +353,9 @@ func TestSortSeqIntegration(t *testing.T) {
 		ID:   "test-sort-seq-flow",
 		Name: "Sort Seq Flow",
 		Nodes: []Node{
-			{ID: "src", Type: "process", Data: map[string]interface{}{}},
+			// junction is the pass-through source; the placeholder
+			// "process" node type was removed from nodebase.
+			{ID: "src", Type: "junction", Data: map[string]interface{}{}},
 			{
 				ID:   "st",
 				Type: "sort",

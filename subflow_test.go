@@ -2,9 +2,9 @@ package noderunner_test
 
 import (
 	"context"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	_ "github.com/dracory/nodebase/builtin"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"reflect"
 	"strings"
 	"testing"
@@ -83,7 +83,8 @@ func TestSubflowEndToEnd(t *testing.T) {
 		if ev.Level == "error" {
 			t.Fatalf("unexpected error event: %+v", ev)
 		}
-		if ev.NodeID == "dbg" && strings.Contains(ev.Message, `"inner:hi"`) {
+		// Bare string: nodebase debug renders payloads without JSON quotes.
+		if ev.NodeID == "dbg" && strings.Contains(ev.Message, `inner:hi`) {
 			sawPayload = true
 		}
 	}
@@ -202,10 +203,11 @@ func TestSubflowEnvOverride(t *testing.T) {
 
 	var sawOverride, sawDefault bool
 	for _, ev := range events {
-		if ev.NodeID == "dbgA" && strings.Contains(ev.Message, `"hi"`) {
+		// Bare strings: nodebase debug renders payloads without JSON quotes.
+		if ev.NodeID == "dbgA" && strings.Contains(ev.Message, `hi`) {
 			sawOverride = true
 		}
-		if ev.NodeID == "dbgB" && strings.Contains(ev.Message, `"default"`) {
+		if ev.NodeID == "dbgB" && strings.Contains(ev.Message, `default`) {
 			sawDefault = true
 		}
 	}
@@ -305,7 +307,8 @@ func TestNodeREDImportRuns(t *testing.T) {
 	}
 	var sawPayload bool
 	for _, ev := range events {
-		if ev.NodeID == dbgID && strings.Contains(ev.Message, `"fromNR:hi"`) {
+		// Bare string: nodebase debug renders payloads without JSON quotes.
+		if ev.NodeID == dbgID && strings.Contains(ev.Message, `fromNR:hi`) {
 			sawPayload = true
 		}
 	}

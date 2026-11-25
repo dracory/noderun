@@ -71,12 +71,13 @@ func TestErrorPortWired(t *testing.T) {
 	// The debug value is the rendered payload — verify the msg.error
 	// shape directly via the event contents.
 	msg := got[0]
-	for _, want := range []string{`"text"`, `"node": "req"`, `"full"`} {
+	// Compact JSON: nodebase debug renders Node-RED-style (no spaces).
+	for _, want := range []string{`"text"`, `"node":"req"`, `"full"`} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("error port message missing %s: %s", want, msg)
 		}
 	}
-	if !strings.Contains(msg, `"originalData": "hello"`) {
+	if !strings.Contains(msg, `"originalData":"hello"`) {
 		t.Fatalf("error port message must carry originalData: %s", msg)
 	}
 

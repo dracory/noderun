@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	"github.com/dracory/nodebase"
 	_ "github.com/dracory/nodebase/builtin"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -185,7 +185,8 @@ func TestQueueDirEditedPayloadDelivers(t *testing.T) {
 
 	q.SetHold(false)
 	got := waitForDebugValues(engine, workflow.GetID(), 1, 3*time.Second)
-	if len(got) != 1 || got[0] != `"fixed"` {
+	// Bare string: nodebase debug renders payloads without JSON quotes.
+	if len(got) != 1 || got[0] != `fixed` {
 		t.Fatalf("expected edited payload to be delivered, got %v", got)
 	}
 	if files := dirItemFiles(t, dir); len(files) != 0 {
@@ -226,7 +227,8 @@ func TestQueueDirInspectOps(t *testing.T) {
 		t.Fatalf("requeue failed: %v", err)
 	}
 	got := waitForDebugValues(engine, workflow.GetID(), 1, 3*time.Second)
-	if len(got) != 1 || got[0] != `"b"` {
+	// Bare string: nodebase debug renders payloads without JSON quotes.
+	if len(got) != 1 || got[0] != `b` {
 		t.Fatalf("expected requeued b, got %v", got)
 	}
 	if q.Count() != 0 || len(dirItemFiles(t, dir)) != 0 {

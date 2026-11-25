@@ -256,13 +256,6 @@ var oracleFlowDifferences = map[string]string{
 	"parser/yaml/01 - Convert JavaScript object to YAML.json":        "object-to-YAML serialization diverges",
 
 	// --- sequence nodes ---
-	"sequence/batch/01 - Number-based group mode.json": "batch grouping sequence semantics diverge",
-	"sequence/batch/03 - Concatenate mode.json":        "batch concatenate semantics diverge",
-	"sequence/join/01 - Automatic join mode.json":      "join auto-mode output diverges",
-	"sequence/join/02 - Manual join mode.json":         "join manual-mode (count/timeout) semantics diverge",
-	"sequence/join/03 - Reduce sequence mode.json":     "join reduce-expression semantics diverge",
-	"sequence/sort/01 - Sort array payload.json":       "sort ordering/key semantics diverge",
-	"sequence/sort/02 - Sort message sequence.json":    "sequence sort (parts) semantics diverge",
 
 	// --- storage / filesystem ---
 	// Fixture paths are staged into a t.TempDir by the harness (see

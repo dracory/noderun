@@ -57,8 +57,10 @@ func TestDebugNode(t *testing.T) {
 
 		var found bool
 		for _, ev := range events {
+			// nodebase debug renders compact JSON (Node-RED parity) —
+			// no space after the colon.
 			if ev.NodeID == "dbg" && ev.Level == "debug" &&
-				strings.Contains(ev.Message, `"a": 1`) {
+				strings.Contains(ev.Message, `"a":1`) {
 				found = true
 			}
 			if ev.NodeID == "dbgOff" && ev.Level == "debug" {
@@ -112,7 +114,9 @@ func TestDebugNodeCompleteTrue(t *testing.T) {
 		_, _, events, _ := engine.GetWorkflowSnapshot(workflow.ID, 0)
 		for _, ev := range events {
 			if ev.NodeID == "dbg" && ev.Level == "debug" {
-				if !strings.Contains(ev.Message, `"a": 1`) ||
+				// Compact JSON: nodebase debug renders Node-RED-style
+				// without a space after the colon.
+				if !strings.Contains(ev.Message, `"a":1`) ||
 					!strings.Contains(ev.Message, "metadata") {
 					t.Fatalf("expected full payload incl. metadata, got: %s", ev.Message)
 				}

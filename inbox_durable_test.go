@@ -151,7 +151,8 @@ func TestDurableRequeueOnRestart(t *testing.T) {
 	t.Cleanup(func() { _ = engine.StopWorkflow(workflow.ID) })
 
 	got := waitForDebugValues(engine, workflow.ID, 3, 3*time.Second)
-	want := []string{`"m1"`, `"m2"`, `"m3"`}
+	// Bare strings: nodebase debug renders payloads without JSON quotes.
+	want := []string{`m1`, `m2`, `m3`}
 	if len(got) != 3 {
 		t.Fatalf("expected 3 re-queued deliveries, got %v", got)
 	}
@@ -186,7 +187,8 @@ func TestDurableEnqueueDrains(t *testing.T) {
 	engine.DiscardPending(msgID)
 
 	got := waitForDebugValues(engine, workflow.ID, 1, 3*time.Second)
-	if len(got) != 1 || got[0] != `"hello"` {
+	// Bare string: nodebase debug renders payloads without JSON quotes.
+	if len(got) != 1 || got[0] != `hello` {
 		t.Fatalf("expected delivery of hello, got %v", got)
 	}
 	if store.saves == 0 {
