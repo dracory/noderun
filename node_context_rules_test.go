@@ -14,7 +14,7 @@ import (
 
 // runChangeRules deploys inj -> change(rules) -> resp and returns the
 // payload after the change node ran.
-func runChangeRules(t *testing.T, rules []map[string]interface{}, in interface{}) nodestore.MessageInterface {
+func runChangeRules(t *testing.T, rules []interface{}, in interface{}) nodestore.MessageInterface {
 	t.Helper()
 	wf := &Workflow{
 		ID: "ctx-change-" + sanitizeName(t.Name()),
@@ -39,9 +39,9 @@ func runChangeRules(t *testing.T, rules []map[string]interface{}, in interface{}
 // TestChangeFlowContextRoundTrip: pt:"flow" writes the context store,
 // tot:"flow" reads it back (flow 05's second rule pair).
 func TestChangeFlowContextRoundTrip(t *testing.T) {
-	out := runChangeRules(t, []map[string]interface{}{
-		{"t": "set", "p": "count", "pt": "flow", "to": "7", "tot": "num"},
-		{"t": "set", "p": "payload", "pt": "msg", "to": "count", "tot": "flow"},
+	out := runChangeRules(t, []interface{}{
+		map[string]interface{}{"t": "set", "p": "count", "pt": "flow", "to": "7", "tot": "num"},
+		map[string]interface{}{"t": "set", "p": "payload", "pt": "msg", "to": "count", "tot": "flow"},
 	}, "orig")
 	if out.GetPayload() != float64(7) {
 		t.Fatalf("expected flow context readback 7, got %#v", out.GetPayload())
@@ -51,9 +51,9 @@ func TestChangeFlowContextRoundTrip(t *testing.T) {
 // TestChangeGlobalContextRoundTrip: pt:"global" writes the engine-wide
 // scope, tot:"global" reads it.
 func TestChangeGlobalContextRoundTrip(t *testing.T) {
-	out := runChangeRules(t, []map[string]interface{}{
-		{"t": "set", "p": "g", "pt": "global", "to": "hello", "tot": "str"},
-		{"t": "set", "p": "payload", "pt": "msg", "to": "g", "tot": "global"},
+	out := runChangeRules(t, []interface{}{
+		map[string]interface{}{"t": "set", "p": "g", "pt": "global", "to": "hello", "tot": "str"},
+		map[string]interface{}{"t": "set", "p": "payload", "pt": "msg", "to": "g", "tot": "global"},
 	}, "orig")
 	if out.GetPayload() != "hello" {
 		t.Fatalf("expected global context readback, got %#v", out.GetPayload())
@@ -63,10 +63,10 @@ func TestChangeGlobalContextRoundTrip(t *testing.T) {
 // TestChangeDeleteFlowContext: a delete rule on a flow key removes it —
 // a later read resolves to undefined.
 func TestChangeDeleteFlowContext(t *testing.T) {
-	out := runChangeRules(t, []map[string]interface{}{
-		{"t": "set", "p": "tmp", "pt": "flow", "to": "x", "tot": "str"},
-		{"t": "delete", "p": "tmp", "pt": "flow"},
-		{"t": "set", "p": "payload", "pt": "msg", "to": "tmp", "tot": "flow"},
+	out := runChangeRules(t, []interface{}{
+		map[string]interface{}{"t": "set", "p": "tmp", "pt": "flow", "to": "x", "tot": "str"},
+		map[string]interface{}{"t": "delete", "p": "tmp", "pt": "flow"},
+		map[string]interface{}{"t": "set", "p": "payload", "pt": "msg", "to": "tmp", "tot": "flow"},
 	}, "orig")
 	if out.GetPayload() != nil {
 		t.Fatalf("expected deleted key to read undefined, got %#v", out.GetPayload())
@@ -107,9 +107,9 @@ func TestChangeEnvValue(t *testing.T) {
 // TestChangeJSONataFlowContext: the supported expression subset —
 // $flowContext("k") plus arithmetic — evaluated against live context.
 func TestChangeJSONataFlowContext(t *testing.T) {
-	out := runChangeRules(t, []map[string]interface{}{
-		{"t": "set", "p": "count", "pt": "flow", "to": "41", "tot": "num"},
-		{"t": "set", "p": "payload", "pt": "msg", "to": `$flowContext("count")+1`, "tot": "jsonata"},
+	out := runChangeRules(t, []interface{}{
+		map[string]interface{}{"t": "set", "p": "count", "pt": "flow", "to": "41", "tot": "num"},
+		map[string]interface{}{"t": "set", "p": "payload", "pt": "msg", "to": `$flowContext("count")+1`, "tot": "jsonata"},
 	}, "orig")
 	if out.GetPayload() != float64(42) {
 		t.Fatalf("expected jsonata increment 42, got %#v", out.GetPayload())
@@ -119,9 +119,9 @@ func TestChangeJSONataFlowContext(t *testing.T) {
 // TestChangeNativeContextRule: the native {op,field,fieldType} shape
 // honours context targets too.
 func TestChangeNativeContextRule(t *testing.T) {
-	out := runChangeRules(t, []map[string]interface{}{
-		{"op": "set", "field": "k", "fieldType": "flow", "value": "9", "valueType": "num"},
-		{"op": "set", "field": "payload", "value": "k", "valueType": "flow"},
+	out := runChangeRules(t, []interface{}{
+		map[string]interface{}{"op": "set", "field": "k", "fieldType": "flow", "value": "9", "valueType": "num"},
+		map[string]interface{}{"op": "set", "field": "payload", "value": "k", "valueType": "flow"},
 	}, "orig")
 	if out.GetPayload() != float64(9) {
 		t.Fatalf("expected native context rule readback 9, got %#v", out.GetPayload())
