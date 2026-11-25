@@ -116,7 +116,7 @@ var oracleDifferences = []oracleDifference{
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello World!"), "85", "text/html; charset=utf-8", "200 OK", 200),
 		Note: "actual-side residual: httpRequest wraps the correct body in a response object"},
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "188bc18.5487a3f", Msg: oracleHTMLH1("Hello World!"),
-		Note: "oracle-side residual: the second request should render the endpoint body; goflow keeps msg.url in metadata so that request never runs"},
+		Note: "oracle-side residual: the second request should render the endpoint body; this engine keeps msg.url in metadata so that request never runs"},
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "", Msg: "invalid input data format",
 		Note: "actual-side residual: second httpRequest rejects the inject message — msg.url arrives in metadata, not the payload map"},
 	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: oracleHTMLH1("Hello Nick!"),
@@ -154,11 +154,11 @@ var oracleDifferences = []oracleDifference{
 	{File: "storage/watch/02 - Watch change in a directory.json", Node: "137d60e2.0e267f", Msg: "failed to write to file: Error: ENOENT: no such file or directory, open '/tmp/HG/hello.txt'",
 		Note: "oracle-side residual: Node-RED file-write error wording for hello.txt"},
 	{File: "storage/watch/02 - Watch change in a directory.json", Node: "137d60e2.0e267f", Msg: "file node open failed: open /tmp/HG/hello.txt: no such file or directory",
-		Note: "actual-side residual: goflow file-write error wording for hello.txt differs from Node-RED"},
+		Note: "actual-side residual: this engine file-write error wording for hello.txt differs from Node-RED"},
 	{File: "storage/watch/02 - Watch change in a directory.json", Node: "655d7bab.cda6f4", Msg: "failed to write to file: Error: ENOENT: no such file or directory, open '/tmp/HG/goodbye.txt'",
 		Note: "oracle-side residual: Node-RED file-write error wording for goodbye.txt"},
 	{File: "storage/watch/02 - Watch change in a directory.json", Node: "655d7bab.cda6f4", Msg: "file node open failed: open /tmp/HG/goodbye.txt: no such file or directory",
-		Note: "actual-side residual: goflow file-write error wording for goodbye.txt differs from Node-RED"},
+		Note: "actual-side residual: this engine file-write error wording for goodbye.txt differs from Node-RED"},
 	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "402f3b7e.988014", Msg: "filename is empty",
 		Note: "actual-side residual: inject props land in message metadata, not msg.filename — file node reports 'filename is empty'"},
 	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "97b6b6b2.a54b38", Msg: "Hello, World!\n",
@@ -166,7 +166,7 @@ var oracleDifferences = []oracleDifference{
 	{File: "storage/write file/04 - Specify encoding of written data.json", Node: "2e814354.278c8c", Msg: "😀",
 		Note: "oracle-side residual: Node-RED reads back the written emoji without an added newline"},
 	{File: "storage/write file/04 - Specify encoding of written data.json", Node: "2e814354.278c8c", Msg: "😀\n",
-		Note: "actual-side residual: written-file encoding/newline detail differs — goflow reads back a trailing newline"},
+		Note: "actual-side residual: written-file encoding/newline detail differs — this engine reads back a trailing newline"},
 
 	// --- function node sandbox gap surfaced by error events ---
 	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:5:20(38)",
@@ -217,15 +217,6 @@ var oracleFlowDifferences = map[string]string{
 	// http/tcp/udp flows drive real listeners and round-trips via the
 	// harness (shared router + ephemeral port, real sockets); residual
 	// divergences are named per event in oracleDifferences.
-
-	// --- exec node ---
-	"function/exec/01 - Get standard output from external command.json": "exec output/exit semantics diverge from Node-RED spawn",
-	"function/exec/02 - Get error output from external command.json":    "exec stderr semantics diverge",
-	"function/exec/03 - Run external command in spawn mode.json":        "exec spawn mode semantics diverge",
-
-	// --- link nodes ---
-	"common/link/02 - Link across tabs.json": "link across tabs routing not implemented",
-	"common/link/03 - Link call.json":        "linkCall return-value semantics diverge",
 
 	// --- sequence nodes ---
 
@@ -444,6 +435,9 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 	t.Setenv("HOME", "/usr/src/node-red")
 	engine := NewWorkflowEngine()
 	engine.AllowOSEnv = true
+	// Real Node-RED runs exec commands — the recorded flows depend on
+	// it (function/exec/*), so the replay opts the host gate in.
+	engine.AllowExec = true
 	engine.HTTPRouter = router
 	// DeployWorkflow waits for activation — inject executors must be
 	// live before FireInjectNode can find them.

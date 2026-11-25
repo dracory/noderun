@@ -50,16 +50,19 @@ func TestExecNodeEcho(t *testing.T) {
 	if s, _ := out.GetPayload().(string); strings.TrimSpace(s) != "hi" {
 		t.Fatalf("expected Data 'hi', got %q", out.GetPayload())
 	}
-	if rc, _ := out.GetMetadata()["rc"].(int); rc != 0 {
-		t.Fatalf("expected rc 0, got %v", out.GetMetadata()["rc"])
+	// Node-RED parity: msg.rc carries the third-output object {code:0}
+	rc, _ := out.GetMetadata()["rc"].(map[string]interface{})
+	if rc["code"] != 0 {
+		t.Fatalf("expected rc {code:0}, got %v", out.GetMetadata()["rc"])
 	}
 	if ports := node.SelectPorts(nil, out); len(ports) != 1 || ports[0] != "output_1" {
 		t.Fatalf("expected routing to output_1, got %v", ports)
 	}
 }
 
-// TestExecNodeNonZeroExit verifies a failing command routes to
-// output_3 carrying stderr and the exit code.
+// TestExecNodeNonZeroExit verifies a failing command still returns
+// stdout on output_1 while the {code,message} object travels on
+// output_3 (Node-RED port semantics).
 func TestExecNodeNonZeroExit(t *testing.T) {
 	engine := NewEngine()
 	engine.AllowExec = true
@@ -68,11 +71,12 @@ func TestExecNodeNonZeroExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
-	if rc, _ := out.GetMetadata()["rc"].(int); rc != 3 {
-		t.Fatalf("expected rc 3, got %v", out.GetMetadata()["rc"])
+	rc, _ := out.GetMetadata()["rc"].(map[string]interface{})
+	if rc["code"] != 3 {
+		t.Fatalf("expected rc {code:3}, got %v", out.GetMetadata()["rc"])
 	}
-	if ports := node.SelectPorts(nil, out); len(ports) != 1 || ports[0] != "output_3" {
-		t.Fatalf("expected routing to output_3, got %v", ports)
+	if ports := node.SelectPorts(nil, out); len(ports) != 1 || ports[0] != "output_1" {
+		t.Fatalf("expected routing to output_1, got %v", ports)
 	}
 }
 
