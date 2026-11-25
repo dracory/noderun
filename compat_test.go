@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
 	_ "github.com/dracory/nodebase/builtin"
+	nodestore "github.com/dracory/nodestore"
 
 	batchnode "github.com/dracory/nodebase/batch"
 	changenode "github.com/dracory/nodebase/change"
@@ -518,8 +518,8 @@ func NewTLSConfigNode(id string, config *TLSConfig) *tlsconfignode.TLSConfigNode
 	return tlsconfignode.NewTLSConfigNode(stNode(id, "tlsConfig", ""), config)
 }
 
-func NewTemplateNode(id string, config *TemplateConfig) *templatenode.TemplateNode {
-	return templatenode.NewTemplateNode(stNode(id, "template", ""), config)
+func NewTemplateNode(id string, config *TemplateConfig, engine nodebase.NodeHost) *templatenode.TemplateNode {
+	return templatenode.NewTemplateNode(stNode(id, "template", ""), config, engine)
 }
 
 func NewTriggerNode(id string, config *TriggerConfig, engine nodebase.NodeHost, workflowID string) *triggernode.TriggerNode {

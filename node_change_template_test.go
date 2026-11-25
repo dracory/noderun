@@ -100,9 +100,10 @@ func TestTemplateNode(t *testing.T) {
 	}
 
 	node := NewTemplateNode("tpl1", &TemplateConfig{
+		Syntax:   "gotemplate",
 		Template: `{"echo": "{{.body.msg}}", "path": "{{.path}}"}`,
 		Format:   "json",
-	})
+	}, nil)
 	out, err := node.Execute(context.Background(), payload)
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
@@ -116,9 +117,10 @@ func TestTemplateNode(t *testing.T) {
 	}
 
 	textNode := NewTemplateNode("tpl2", &TemplateConfig{
+		Syntax:   "gotemplate",
 		Template: "you said {{.body.msg}}",
 		Format:   "text",
-	})
+	}, nil)
 	out, err = textNode.Execute(context.Background(), &Message{Payload: map[string]interface{}{
 		"body": map[string]interface{}{"msg": "hi there"},
 	}})
@@ -133,12 +135,12 @@ func TestTemplateNode(t *testing.T) {
 // TestTemplateNodeErrors verifies parse/execute/JSON errors surface
 // as node errors
 func TestTemplateNodeErrors(t *testing.T) {
-	badParse := NewTemplateNode("tpl3", &TemplateConfig{Template: "{{", Format: "json"})
+	badParse := NewTemplateNode("tpl3", &TemplateConfig{Syntax: "gotemplate", Template: "{{", Format: "json"}, nil)
 	if _, err := badParse.Execute(context.Background(), &Message{Payload: map[string]interface{}{}}); err == nil {
 		t.Fatal("expected template parse error")
 	}
 
-	badJSON := NewTemplateNode("tpl4", &TemplateConfig{Template: "not json", Format: "json"})
+	badJSON := NewTemplateNode("tpl4", &TemplateConfig{Syntax: "gotemplate", Template: "not json", Format: "json"}, nil)
 	if _, err := badJSON.Execute(context.Background(), &Message{Payload: map[string]interface{}{}}); err == nil {
 		t.Fatal("expected JSON parse error")
 	}
