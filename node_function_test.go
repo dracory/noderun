@@ -2,9 +2,9 @@ package noderunner_test
 
 import (
 	"context"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	function "github.com/dracory/nodebase/function"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )
@@ -297,6 +297,10 @@ func runFunctionScript(t *testing.T, script string) (nodestore.MessageInterface,
 // injectGlobals is the only injection point (see node_function.go).
 func TestFunctionNodeSandboxIsolation(t *testing.T) {
 	// Host-capability globals must simply not exist inside the VM.
+	// console and setTimeout/clearTimeout are NOT host bindings — they
+	// are Node-RED-parity sandbox APIs confined to the VM (console.*
+	// maps to node events, timers run script callbacks on the VM), so
+	// they are expected to exist.
 	out, err := runFunctionScript(t,
 		"return {payload:{require:typeof require,process:typeof process,"+
 			"console:typeof console,setTimeout:typeof setTimeout,"+
@@ -310,12 +314,15 @@ func TestFunctionNodeSandboxIsolation(t *testing.T) {
 		t.Fatalf("expected map payload, got %#v", out.GetPayload())
 	}
 	for _, name := range []string{
-		"require", "process", "console", "setTimeout",
+		"require", "process",
 		"fetch", "module", "XMLHttpRequest",
 	} {
 		if m[name] != "undefined" {
 			t.Errorf("host binding leaked into sandbox: %s is %v", name, m[name])
 		}
+	}
+	if m["console"] != "object" || m["setTimeout"] != "function" {
+		t.Errorf("Node-RED parity globals missing: console=%v setTimeout=%v", m["console"], m["setTimeout"])
 	}
 	// `global` exists but is the Node-RED global-context API object —
 	// not the JS global object — so it must expose only get/set/keys

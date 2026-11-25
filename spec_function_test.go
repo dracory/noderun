@@ -208,7 +208,30 @@ func TestFunctionSpec(t *testing.T) {
 		})
 
 		s.it("should handle setTimeout()", func(t *testing.T) {
-			skipf(t, "setTimeout/setInterval not exposed in the goja sandbox")
+			wf := &Workflow{
+				ID:   "spec-fn-settimeout",
+				Name: "fn spec",
+				Nodes: []Node{
+					{ID: "inj", Type: "inject", Data: map[string]interface{}{}},
+					{ID: "fn", Type: "function", Data: map[string]interface{}{
+						"func": "setTimeout(function(){node.send(msg);},50);",
+					}},
+					{ID: "resp", Type: "httpResponse", Data: map[string]interface{}{}},
+				},
+				Edges: []Edge{
+					{ID: "e1", Source: "inj", Target: "fn"},
+					{ID: "e2", Source: "fn", Target: "resp"},
+				},
+			}
+			engine := specDeployFlow(t, wf)
+			ch := specInjectInto(t, engine, wf.ID, "inj", &Message{
+				Payload:   "go",
+				Timestamp: time.Now(),
+			})
+			out := specAwaitResponse(t, ch, 3*time.Second)
+			if out.GetPayload() != "go" {
+				t.Fatalf("expected 'go' via setTimeout send, got %#v", out.GetPayload())
+			}
 		})
 
 		s.it("should use the same Date object from outside the sandbox", func(t *testing.T) {

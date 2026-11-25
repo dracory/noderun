@@ -178,6 +178,19 @@ var oracleDifferences = []oracleDifference{
 	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:14:20(64)",
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
 
+	// --- function/08: policy divergence, not a gap ---
+	// Node-RED's functionGlobalContext is empty in the recorder's
+	// container, so real Node-RED ALSO fails this flow — with a vm
+	// TypeError blob. The goja sandbox fails the same access the same
+	// way, only the error TEXT (and JS stack) differs. Supporting
+	// external modules via require()/functionExternalModules is a
+	// deliberate policy choice not implemented — the fail-loud
+	// divergence is named here.
+	{File: "function/function/08 - Using external modules.json", Node: "c9100743.673598", Msg: `{"__enc__":true,"type":"error","data":{"name":"TypeError","message":"Cannot read properties of undefined (reading 'hostname')","stack":"TypeError: Cannot read properties of undefined (reading 'hostname')\n    at Function node:c9100743.673598 [use os module]:5:18\n    at Function node:c9100743.673598 [use os module]:12:3\n    at Script.runInContext (node:vm:149:12)\n    at processMessage (/usr/src/node-red/node_modules/@node-red/nodes/core/function/10-function.js:504:37)\n    at FunctionNode._inputCallback (/usr/src/node-red/node_modules/@node-red/nodes/core/function/10-function.js:422:17)\n    at /usr/src/node-red/node_modules/@node-red/runtime/lib/nodes/Node.js:214:26\n    at Object.trigger (/usr/src/node-red/node_modules/@node-red/util/lib/hooks.js:166:13)\n    at Node._emitInput (/usr/src/node-red/node_modules/@node-red/runtime/lib/nodes/Node.js:206:11)\n    at Node.emit (/usr/src/node-red/node_modules/@node-red/runtime/lib/nodes/Node.js:190:25)"}}`,
+		Note: "oracle-side residual: Node-RED's vm TypeError text for the same undefined-module access (policy: no external modules)"},
+	{File: "function/function/08 - Using external modules.json", Node: "c9100743.673598", Msg: "function script error: TypeError: Cannot read property 'hostname' of undefined or null at function:5:15(9)",
+		Note: "actual-side residual: goja TypeError wording for the same undefined-module access — same class of failure, different text"},
+
 	// --- structured parsers: object key order is unrecoverable ---
 	// xml/yaml serialize from unordered Go maps (children emit sorted);
 	// Node-RED keeps JavaScript object insertion order.
@@ -197,18 +210,7 @@ var oracleDifferences = []oracleDifference{
 // written reason; a tolerated flow that starts matching fails the
 // suite so the map tightens as parity improves.
 var oracleFlowDifferences = map[string]string{
-	// --- JSONata expressions are not implemented (deploy-fails loud) ---
-	"common/debug/05 - Formatting output using JSONata.json":       "JSONata expression in debug 'complete' field — no JSONata support",
-	"function/change/03 - Set value using JSONata.json":            "change rule uses tot:\"jsonata\" — no JSONata support",
-	"function/switch/05 - Use JSONata for switch rule.json":        "switch rule uses jsonata_exp — no JSONata support",
-	"network/tcp/03 - Send reply to client of TCP connection.json": "change rule uses tot:\"jsonata\" — no JSONata support",
-
 	// --- function node (goja) gaps ---
-	"function/function/02 - Send multiple messages.json":       "Node-RED array-on-output semantics (array per output port) not implemented",
-	"function/function/03 - Send messages asynchronously.json": "async done()/node.send() semantics not implemented",
-	"function/function/08 - Using external modules.json":       "functionExternalModules/require() not supported in goja sandbox",
-	"function/function/09 - Setup and close.json":              "function node setup/close lifecycle not implemented",
-	"function/function/10 - Asynchronous setup.json":           "function node async setup lifecycle not implemented",
 
 	// --- misc deploy gaps ---
 
@@ -485,6 +487,16 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 		switch n["type"] {
 		case "watch":
 			widen(2500 * time.Millisecond)
+		case "function":
+			// setTimeout in the function body or setup code delivers
+			// on wall-clock timers the recorder captured (function/03
+			// waits 2s, function/10's setup waits 1s) — widen past the
+			// largest scripted delay so the send lands in the window.
+			for _, field := range []string{"func", "initialize"} {
+				if src, ok := n[field].(string); ok && strings.Contains(src, "setTimeout") {
+					widen(2500 * time.Millisecond)
+				}
+			}
 		case "trigger", "delay":
 			widen(2500 * time.Millisecond)
 		case "join":
