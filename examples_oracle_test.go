@@ -72,8 +72,61 @@ type oracleDifference struct {
 // oracleDifferences is the named-difference list — the only place
 // divergence between this engine and real Node-RED may be recorded.
 var oracleDifferences = []oracleDifference{
-	// Filled in as real divergences are confirmed — see
-	// docs/example-flows.md.
+	// --- http: response payload shape & request-context gaps ---
+	// httpRequest emits a response object {body, statusCode, headers,…}
+	// while Node-RED puts the response body directly in msg.payload
+	// (ret:"txt"), so the recorded html body and the emitted JSON map
+	// never match on these debug nodes.
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: "",
+		Note: "httpRequest wraps the body in a response object; Node-RED places it in msg.payload"},
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "188bc18.5487a3f", Msg: "",
+		Note: "same response-object wrapper; also msg.url from inject props lands in metadata, not payload"},
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "", Msg: "invalid input data format",
+		Note: "second httpRequest rejects the inject message — msg.url arrives in metadata, not the payload map"},
+	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: "",
+		Note: "query parameters are not exposed to the template as req.query.*; response is the wrapper object"},
+	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: "",
+		Note: "route parameters are not exposed to the template as req.params.*; response is the wrapper object"},
+	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: "",
+		Note: "request headers are not exposed to the template as req.headers.*; response is the wrapper object"},
+	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: "",
+		Note: "httpTrigger JSON-decodes request bodies — a plain-text POST is rejected with 400 (Node-RED accepts raw bodies)"},
+
+	// --- udp: real round-trip emits an event the recorder missed ---
+	{File: "network/udp/01 - Transfer data using UDP protocol.json", Node: "d98b60d3.7331e", Msg: "",
+		Note: "the real UDP datagram round-trip reaches debug; the oracle recording captured no events for this flow"},
+
+	// --- storage: fixture-path & encoding residuals ---
+	{File: "storage/read file/02 - Read data in specified encoding.json", Node: "d28c8994.99c0a8", Msg: "",
+		Note: "fileIn 'encoding':'base64' output encoding is not applied — payload is the decoded text"},
+	{File: "storage/read file/03 - Read data breaking lines into messages.json", Node: "7ed8282c.92b338", Msg: "",
+		Note: "Node-RED emits a trailing empty line after the final newline; ours does not (wildcard also covers the matching lines)"},
+	{File: "storage/read file/04 - Create a message stream.json", Node: "c48d8ae0.9ff3a8", Msg: "",
+		Note: "join + conditional switch chain emits no event — engine gap in join/switch parts semantics"},
+	{File: "storage/watch/01 - Watch change of a file.json", Node: "a91562b9.ca805", Msg: "",
+		Note: "watch reports the absolute fixture path; the harness stages it under t.TempDir"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "cbfb788b.297f98", Msg: "",
+		Note: "watch node emits no error event for a missing watched directory (Node-RED does)"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "137d60e2.0e267f", Msg: "",
+		Note: "file-write error text embeds the staged temp path and differs in wording from Node-RED"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "655d7bab.cda6f4", Msg: "",
+		Note: "file-write error text embeds the staged temp path and differs in wording from Node-RED"},
+	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "402f3b7e.988014", Msg: "",
+		Note: "inject props land in message metadata, not msg.filename — file node reports 'filename is empty'"},
+	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "97b6b6b2.a54b38", Msg: "",
+		Note: "consequence of the above: the read side never produces the recorded body"},
+	{File: "storage/write file/04 - Specify encoding of written data.json", Node: "2e814354.278c8c", Msg: "",
+		Note: "written-file encoding/newline detail differs (msg text identical modulo invisible bytes)"},
+
+	// --- function node sandbox gap surfaced by error events ---
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:5:20",
+		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:8:20",
+		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:11:20",
+		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:14:20",
+		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
 }
 
 // oracleFlowDifferences accepts divergence for a whole flow file —
@@ -94,7 +147,6 @@ var oracleFlowDifferences = map[string]string{
 	"function/switch/09 - Route message based on context value.json": "change rule writes flow context — not supported",
 
 	// --- function node (goja) gaps ---
-	"function/function/01 - Send message to output port.json":  "function output semantics differ from Node-RED sandbox",
 	"function/function/02 - Send multiple messages.json":       "Node-RED array-on-output semantics (array per output port) not implemented",
 	"function/function/03 - Send messages asynchronously.json": "async done()/node.send() semantics not implemented",
 	"function/function/08 - Using external modules.json":       "functionExternalModules/require() not supported in goja sandbox",
@@ -102,16 +154,10 @@ var oracleFlowDifferences = map[string]string{
 	"function/function/10 - Asynchronous setup.json":           "function node async setup lifecycle not implemented",
 
 	// --- switch / range evaluation semantics ---
-	"function/switch/01 - Select output port.json":                "rule evaluation semantics diverge (numeric compare on scalar payload)",
 	"function/switch/02 - Check all rules.json":                   "\"check all\" mode output semantics diverge",
-	"function/switch/03 - Stop after first match.json":            "first-match routing semantics diverge",
-	"function/switch/04 - Select output port by type.json":        "istype/eq value comparison diverges",
 	"function/switch/06 - Use JSONata for switch value.json":      "odd/even routing via boolean rule diverges",
 	"function/switch/07 - Recreate message sequence.json":         "message-sequence (parts) recreation not implemented",
 	"function/switch/08 - Route message based on properties.json": "multi-property routing diverges",
-	"function/range/02 - Scale input and round to integer.json":   "range rounding/scale semantics diverge",
-	"function/range/03 - Limit input.json":                        "range clamp (min/max limit) semantics diverge",
-	"function/range/04 - Scale and wrap input.json":               "range wrap-around semantics diverge",
 
 	// --- delay timing semantics ---
 	"function/delay/01 - Delay message.json":                     "delay timing window exceeds oracle capture window",
