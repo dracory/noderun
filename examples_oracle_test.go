@@ -23,11 +23,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	nodebase "github.com/dracory/nodebase"
 	. "github.com/dracory/noderun"
 	nodestore "github.com/dracory/nodestore"
 )
@@ -78,61 +83,55 @@ var oracleDifferences = []oracleDifference{
 // suite so the map tightens as parity improves.
 var oracleFlowDifferences = map[string]string{
 	// --- JSONata expressions are not implemented (deploy-fails loud) ---
-	"common/debug/05 - Formatting output using JSONata.json":      "JSONata expression in debug 'complete' field — no JSONata support",
-	"function/change/03 - Set value using JSONata.json":           "change rule uses tot:\"jsonata\" — no JSONata support",
-	"function/switch/05 - Use JSONata for switch rule.json":       "switch rule uses jsonata_exp — no JSONata support",
+	"common/debug/05 - Formatting output using JSONata.json":       "JSONata expression in debug 'complete' field — no JSONata support",
+	"function/change/03 - Set value using JSONata.json":            "change rule uses tot:\"jsonata\" — no JSONata support",
+	"function/switch/05 - Use JSONata for switch rule.json":        "switch rule uses jsonata_exp — no JSONata support",
 	"network/tcp/03 - Send reply to client of TCP connection.json": "change rule uses tot:\"jsonata\" — no JSONata support",
 
 	// --- env vars / flow & global context (deploy-fails loud) ---
-	"function/change/04 - Set value from env var.json":       "change rule reads process env (tot:\"env\") — not supported",
-	"function/change/05 - Set flow context.json":             "change rule writes flow context — change/switch rules only see msg",
+	"function/change/04 - Set value from env var.json":               "change rule reads process env (tot:\"env\") — not supported",
+	"function/change/05 - Set flow context.json":                     "change rule writes flow context — change/switch rules only see msg",
 	"function/switch/09 - Route message based on context value.json": "change rule writes flow context — not supported",
 
 	// --- function node (goja) gaps ---
-	"function/function/01 - Send message to output port.json":       "function output semantics differ from Node-RED sandbox",
-	"function/function/02 - Send multiple messages.json":            "Node-RED array-on-output semantics (array per output port) not implemented",
-	"function/function/03 - Send messages asynchronously.json":      "async done()/node.send() semantics not implemented",
-	"function/function/08 - Using external modules.json":            "functionExternalModules/require() not supported in goja sandbox",
-	"function/function/09 - Setup and close.json":                   "function node setup/close lifecycle not implemented",
-	"function/function/10 - Asynchronous setup.json":                "function node async setup lifecycle not implemented",
+	"function/function/01 - Send message to output port.json":  "function output semantics differ from Node-RED sandbox",
+	"function/function/02 - Send multiple messages.json":       "Node-RED array-on-output semantics (array per output port) not implemented",
+	"function/function/03 - Send messages asynchronously.json": "async done()/node.send() semantics not implemented",
+	"function/function/08 - Using external modules.json":       "functionExternalModules/require() not supported in goja sandbox",
+	"function/function/09 - Setup and close.json":              "function node setup/close lifecycle not implemented",
+	"function/function/10 - Asynchronous setup.json":           "function node async setup lifecycle not implemented",
 
 	// --- switch / range evaluation semantics ---
-	"function/switch/01 - Select output port.json":                  "rule evaluation semantics diverge (numeric compare on scalar payload)",
-	"function/switch/02 - Check all rules.json":                     "\"check all\" mode output semantics diverge",
-	"function/switch/03 - Stop after first match.json":              "first-match routing semantics diverge",
-	"function/switch/04 - Select output port by type.json":          "istype/eq value comparison diverges",
-	"function/switch/06 - Use JSONata for switch value.json":        "odd/even routing via boolean rule diverges",
-	"function/switch/07 - Recreate message sequence.json":           "message-sequence (parts) recreation not implemented",
-	"function/switch/08 - Route message based on properties.json":   "multi-property routing diverges",
-	"function/range/02 - Scale input and round to integer.json":     "range rounding/scale semantics diverge",
-	"function/range/03 - Limit input.json":                          "range clamp (min/max limit) semantics diverge",
-	"function/range/04 - Scale and wrap input.json":                 "range wrap-around semantics diverge",
+	"function/switch/01 - Select output port.json":                "rule evaluation semantics diverge (numeric compare on scalar payload)",
+	"function/switch/02 - Check all rules.json":                   "\"check all\" mode output semantics diverge",
+	"function/switch/03 - Stop after first match.json":            "first-match routing semantics diverge",
+	"function/switch/04 - Select output port by type.json":        "istype/eq value comparison diverges",
+	"function/switch/06 - Use JSONata for switch value.json":      "odd/even routing via boolean rule diverges",
+	"function/switch/07 - Recreate message sequence.json":         "message-sequence (parts) recreation not implemented",
+	"function/switch/08 - Route message based on properties.json": "multi-property routing diverges",
+	"function/range/02 - Scale input and round to integer.json":   "range rounding/scale semantics diverge",
+	"function/range/03 - Limit input.json":                        "range clamp (min/max limit) semantics diverge",
+	"function/range/04 - Scale and wrap input.json":               "range wrap-around semantics diverge",
 
 	// --- delay timing semantics ---
-	"function/delay/01 - Delay message.json":                        "delay timing window exceeds oracle capture window",
-	"function/delay/02 - Delay message by message property.json":    "msg.delay timing semantics diverge",
-	"function/delay/03 - Reset or flush pending message.json":       "delay reset/flush semantics diverge",
+	"function/delay/01 - Delay message.json":                     "delay timing window exceeds oracle capture window",
+	"function/delay/02 - Delay message by message property.json": "msg.delay timing semantics diverge",
+	"function/delay/03 - Reset or flush pending message.json":    "delay reset/flush semantics diverge",
 
 	// --- template formatting diffs ---
-	"function/template/01 - Use mustache syntax.json":               "mustache rendering whitespace/output differs",
-	"function/template/02 - Parse result as JSON.json":              "JSON parse of rendered template diverges",
-	"function/template/03 - Parse result as YAML.json":              "YAML parse of rendered template diverges",
+	"function/template/01 - Use mustache syntax.json":  "mustache rendering whitespace/output differs",
+	"function/template/02 - Parse result as JSON.json": "JSON parse of rendered template diverges",
+	"function/template/03 - Parse result as YAML.json": "YAML parse of rendered template diverges",
 
 	// --- misc deploy gaps ---
-	"function/trigger/01 - Outputs two value with interval.json":    "NR serializes bytopic as \"all\" string — enum-valued bool not coerced",
-	"network/websocket/02 - Connect to websocket out server.json":   "websocket-client/websocket-listener config node types not registered",
+	"function/trigger/01 - Outputs two value with interval.json":                               "NR serializes bytopic as \"all\" string — enum-valued bool not coerced",
+	"network/websocket/02 - Connect to websocket out server.json":                              "websocket-client/websocket-listener config node types not registered",
 	"parser/html/03 - Extract array of HTML element by CSS selector specified in message.json": "html selector from msg not supported (config requires tag)",
 
 	// --- live-network flows (real sockets/HTTP round-trips) ---
-	"network/http/01 - Create HTTP endpoint.json":            "flow needs a live HTTP round-trip through its own http-request node",
-	"network/http/02 - Handle query parameters.json":         "flow needs a live HTTP round-trip",
-	"network/http/03 - Handle URL parameters.json":           "flow needs a live HTTP round-trip",
-	"network/http/04 - Access HTTP request headers.json":     "flow needs a live HTTP round-trip",
-	"network/http/05 - Post data to a flow.json":             "flow needs a live HTTP round-trip",
-	"network/http/06 - Post file to a flow.json":             "port :8081 still held from previous subtest listener release",
-	"network/http/07 - Working with cookies.json":            "port :8081 still held from previous subtest listener release",
-	"network/tcp/02 - Connect to TCP in server.json":         "live TCP server/client round-trip semantics diverge",
-	"network/udp/01 - Transfer data using UDP protocol.json": "live UDP round-trip semantics diverge",
+	// http/tcp/udp flows drive real listeners and round-trips via the
+	// harness (shared router + ephemeral port, real sockets); residual
+	// divergences are named per event in oracleDifferences.
 
 	// --- exec node ---
 	"function/exec/01 - Get standard output from external command.json": "exec output/exit semantics diverge from Node-RED spawn",
@@ -144,16 +143,16 @@ var oracleFlowDifferences = map[string]string{
 	"common/link/03 - Link call.json":        "linkCall return-value semantics diverge",
 
 	// --- csv parser ---
-	"parser/csv/01 - Parse CSV with default column name as message sequence.json":          "CSV message-sequence emission semantics diverge",
-	"parser/csv/02 - Parse CSV with default column name as array.json":                     "CSV array output format diverges",
-	"parser/csv/03 - Parse CSV with specified column name as message sequence.json":        "CSV named-column sequence diverges",
-	"parser/csv/04 - Parse CSV with column name in first row as message sequence.json":     "CSV header-row column names diverge",
-	"parser/csv/05 - Convert JavaScript object to CSV.json":                                 "object-to-CSV column selection diverges",
-	"parser/csv/06 - Convert JavaScript object to CSV.json":                                 "object-to-CSV column selection diverges",
+	"parser/csv/01 - Parse CSV with default column name as message sequence.json":             "CSV message-sequence emission semantics diverge",
+	"parser/csv/02 - Parse CSV with default column name as array.json":                        "CSV array output format diverges",
+	"parser/csv/03 - Parse CSV with specified column name as message sequence.json":           "CSV named-column sequence diverges",
+	"parser/csv/04 - Parse CSV with column name in first row as message sequence.json":        "CSV header-row column names diverge",
+	"parser/csv/05 - Convert JavaScript object to CSV.json":                                   "object-to-CSV column selection diverges",
+	"parser/csv/06 - Convert JavaScript object to CSV.json":                                   "object-to-CSV column selection diverges",
 	"parser/csv/07 - Convert array of JavaScript objects to CSV with column name header.json": "CSV header output diverges",
-	"parser/csv/08 - Specify column names in input message.json":                            "msg-provided column names diverge",
-	"parser/csv/09 - Send column name when reset property set.json":                         "CSV reset-property column emission diverges",
-	"parser/csv/10 - Join parsed CSV message sequence using join node.json":                 "CSV+join sequence semantics diverge",
+	"parser/csv/08 - Specify column names in input message.json":                              "msg-provided column names diverge",
+	"parser/csv/09 - Send column name when reset property set.json":                           "CSV reset-property column emission diverges",
+	"parser/csv/10 - Join parsed CSV message sequence using join node.json":                   "CSV+join sequence semantics diverge",
 
 	// --- html parser ---
 	"parser/html/01 - Extract array of HTML element by CSS selector.json":           "html extraction output shape diverges (elements vs text)",
@@ -161,11 +160,11 @@ var oracleFlowDifferences = map[string]string{
 	"parser/html/04 - Join extracted sequence of HTML element using join node.json": "html+join sequence diverges",
 
 	// --- structured parsers ---
-	"parser/json/03 - Validate input JSON string.json":           "json schema validation not implemented",
-	"parser/xml/01 - Convert JavaScript object to XML.json":      "object-to-XML serialization diverges",
-	"parser/xml/02 - Convert XML to JavaScript object.json":      "XML-to-object conversion diverges",
+	"parser/json/03 - Validate input JSON string.json":               "json schema validation not implemented",
+	"parser/xml/01 - Convert JavaScript object to XML.json":          "object-to-XML serialization diverges",
+	"parser/xml/02 - Convert XML to JavaScript object.json":          "XML-to-object conversion diverges",
 	"parser/xml/03 - Control conversion using options property.json": "msg-controlled XML options diverge",
-	"parser/yaml/01 - Convert JavaScript object to YAML.json":    "object-to-YAML serialization diverges",
+	"parser/yaml/01 - Convert JavaScript object to YAML.json":        "object-to-YAML serialization diverges",
 
 	// --- sequence nodes ---
 	"sequence/batch/01 - Number-based group mode.json": "batch grouping sequence semantics diverge",
@@ -177,15 +176,9 @@ var oracleFlowDifferences = map[string]string{
 	"sequence/sort/02 - Sort message sequence.json":    "sequence sort (parts) semantics diverge",
 
 	// --- storage / filesystem ---
-	"storage/read file/01 - Read string from a file.json":                 "fixture file only exists inside the Node-RED container filesystem",
-	"storage/read file/02 - Read data in specified encoding.json":         "fixture file only exists inside the Node-RED container filesystem",
-	"storage/read file/03 - Read data breaking lines into messages.json":  "fixture file only exists inside the Node-RED container filesystem",
-	"storage/read file/04 - Create a message stream.json":                 "fixture file only exists inside the Node-RED container filesystem",
-	"storage/watch/01 - Watch change of a file.json":                      "watches a file the oracle flow wrote into the container",
-	"storage/watch/02 - Watch change in a directory.json":                 "watches a directory written inside the NR container",
-	"storage/write file/01 - Write string to a file.json":                 "writes then reads container-local fixture paths",
-	"storage/write file/02 - Write string to a file specified by property.json": "container-local fixture path",
-	"storage/write file/04 - Specify encoding of written data.json":       "container-local fixture path",
+	// Fixture paths are staged into a t.TempDir by the harness (see
+	// stageOracleFixtures); residual divergences are named per event in
+	// oracleDifferences.
 }
 
 func TestNodeREDExampleOracle(t *testing.T) {
@@ -212,7 +205,7 @@ func TestNodeREDExampleOracle(t *testing.T) {
 		files[filepath.ToSlash(rel)] = f
 	}
 
-	accepted := map[int]bool{}      // oracleDifferences indexes actually used
+	accepted := map[int]bool{}         // oracleDifferences indexes actually used
 	flowTolerated := map[string]bool{} // oracleFlowDifferences files actually used
 	var failures int
 	for _, of := range orc.Flows {
@@ -285,6 +278,17 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 	if err := json.Unmarshal(raw, &nodes); err != nil {
 		return fail("parse %s: %v", of.File, err)
 	}
+	// Environmental staging: flows recorded inside a Node-RED runtime
+	// assume its filesystem and its single shared HTTP listener on
+	// :1880. Re-create both here — fixture paths move into a private
+	// temp dir, and http-in nodes mount on a shared router bound to an
+	// ephemeral port (the Node-RED model: one listener, many routes).
+	fixtureDir := t.TempDir()
+	router, httpBase := startOracleHTTPListener(t)
+	for _, n := range nodes {
+		stageOracleFixtures(n, fixtureDir, httpBase)
+	}
+
 	seen := map[string]bool{}
 	for _, n := range nodes {
 		if n["type"] == "tab" {
@@ -313,8 +317,8 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 		typ  string
 		x, y float64
 	}
-	upstream := map[string]posKey{}  // upstream id -> identity
-	byPos := map[posKey]string{}     // identity -> upstream id
+	upstream := map[string]posKey{} // upstream id -> identity
+	byPos := map[posKey]string{}    // identity -> upstream id
 	dupPos := map[posKey]bool{}
 	for _, n := range nodes {
 		if n["type"] == "tab" || n["type"] == "comment" {
@@ -345,6 +349,7 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	engine := NewWorkflowEngine()
+	engine.HTTPRouter = router
 	// DeployWorkflow waits for activation — inject executors must be
 	// live before FireInjectNode can find them.
 	if _, err := engine.DeployWorkflow(ctx, w, nil); err != nil {
@@ -363,16 +368,197 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 			return fail("inject %s in %s: %v", id, of.File, err)
 		}
 	}
-	time.Sleep(500 * time.Millisecond)
+	// Watch nodes report filesystem changes asynchronously — give them
+	// a wider settle window than message-driven flows need.
+	settle := 500 * time.Millisecond
+	for _, n := range nodes {
+		if n["type"] == "watch" {
+			settle = 2500 * time.Millisecond
+		}
+	}
+	time.Sleep(settle)
 
 	_, _, snap, _ := engine.GetWorkflowSnapshot(w.GetID(), 0)
 	var got []oracleDebugEvent
 	for _, ev := range snap {
-		if ev.Level == "debug" && ev.NodeID != "" {
+		// The oracle records both debug output and node-level errors
+		// (the recorder captures what Node-RED surfaces per node).
+		if (ev.Level == "debug" || ev.Level == "error") && ev.NodeID != "" {
 			got = append(got, oracleDebugEvent{Node: importedToUpstream[ev.NodeID], Name: ev.NodeName, Msg: ev.Message})
 		}
 	}
 	return got, nil
+}
+
+// oracleSharedRouter adapts a shared http.ServeMux to
+// nodebase.HTTPRouter so every http-in node in a flow mounts on one
+// listener — the Node-RED model. Conflicts are returned as errors
+// (deploy failures), never panics; Unregister rebuilds the mux without
+// the removed pattern (ServeMux itself cannot unregister) and
+// tolerates patterns that were never mounted.
+type oracleSharedRouter struct {
+	mu       sync.Mutex
+	mux      *http.ServeMux // swapped atomically under mu on rebuild
+	handlers map[string]http.Handler
+}
+
+func (r *oracleSharedRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.mu.Lock()
+	mux := r.mux
+	r.mu.Unlock()
+	mux.ServeHTTP(w, req)
+}
+
+func (r *oracleSharedRouter) rebuild() {
+	mux := http.NewServeMux()
+	for pattern, h := range r.handlers {
+		mux.Handle(pattern, h)
+	}
+	r.mux = mux
+}
+
+func (r *oracleSharedRouter) Handle(pattern string, h http.Handler) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.handlers[pattern]; ok {
+		return fmt.Errorf("route %q already mounted", pattern)
+	}
+	// ServeMux.Handle panics on a conflicting pattern — probe on a
+	// throwaway mux and translate the panic into the contract error.
+	var panErr error
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				panErr = fmt.Errorf("%v", rec)
+			}
+		}()
+		probe := http.NewServeMux()
+		for p, ph := range r.handlers {
+			probe.Handle(p, ph)
+		}
+		probe.Handle(pattern, h)
+	}()
+	if panErr != nil {
+		return fmt.Errorf("route %q: %w", pattern, panErr)
+	}
+	r.handlers[pattern] = h
+	r.rebuild()
+	return nil
+}
+
+func (r *oracleSharedRouter) Unregister(pattern string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.handlers[pattern]; !ok {
+		return
+	}
+	delete(r.handlers, pattern)
+	r.rebuild()
+}
+
+// startOracleHTTPListener binds a loopback listener on an ephemeral
+// port serving a fresh shared router — the stand-in for the Node-RED
+// runtime's own HTTP listener. It returns the router (installed on the
+// engine as host.SharedHTTPRouter) and the base URL request nodes
+// should be rewritten to. Subtests run sequentially and each gets its
+// own port, so same-port bind races cannot occur.
+func startOracleHTTPListener(t *testing.T) (nodebase.HTTPRouter, string) {
+	t.Helper()
+	router := &oracleSharedRouter{mux: http.NewServeMux(), handlers: map[string]http.Handler{}}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("oracle http listener: %v", err)
+	}
+	srv := &http.Server{Handler: router}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return router, fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
+}
+
+// stageOracleFixtures rewrites one raw Node-RED node document so the
+// flow runs hermetically:
+//
+//   - filesystem fixtures: Node-RED examples read/write under /tmp —
+//     paths in "filename"/"files" config and inject props are moved
+//     under fixtureDir, preserving the relative structure (a missing
+//     dir in the recording stays missing here).
+//   - http-in nodes are switched to listener "main" so they mount on
+//     the shared router instead of each binding a private port.
+//   - request URLs pointing at the recorded :1880 listener (node "url"
+//     config and inject props) are rewritten to the live listener.
+func stageOracleFixtures(n map[string]interface{}, fixtureDir, httpBase string) {
+	movePath := func(s string) string {
+		if s == "/tmp" {
+			return fixtureDir
+		}
+		if strings.HasPrefix(s, "/tmp/") {
+			return filepath.Join(fixtureDir, s[len("/tmp/"):])
+		}
+		return s
+	}
+	moveURL := func(s string) string {
+		for _, host := range []string{"localhost:1880", "127.0.0.1:1880"} {
+			if strings.Contains(s, "://"+host) {
+				return strings.Replace(s, "://"+host, "://"+strings.TrimPrefix(httpBase, "http://"), 1)
+			}
+		}
+		return s
+	}
+
+	for _, key := range []string{"filename", "files"} {
+		if s, ok := n[key].(string); ok {
+			n[key] = movePath(s)
+		}
+	}
+	switch n["type"] {
+	case "http in":
+		// Mount on the shared router; Port is ignored in "main" mode.
+		n["listener"] = "main"
+		// Node-RED stores the method lowercase ("get"); ServeMux
+		// method patterns match exact case, so normalize.
+		if s, ok := n["method"].(string); ok {
+			n["method"] = strings.ToUpper(s)
+		}
+	case "http request":
+		if s, ok := n["url"].(string); ok {
+			n["url"] = moveURL(s)
+		}
+	case "inject":
+		for _, p := range arrayOfMaps(n["props"]) {
+			// Node-RED semantics: a "payload" prop with no v/vt means
+			// "use the legacy payload/payloadType fields" — backfill
+			// so the inject does not fall back to a timestamp.
+			if p["p"] == "payload" {
+				_, hasV := p["v"]
+				_, hasVT := p["vt"]
+				if !hasV && !hasVT {
+					if s, ok := n["payload"].(string); ok && s != "" {
+						p["v"] = s
+						vt, _ := n["payloadType"].(string)
+						if vt == "" {
+							vt = "str"
+						}
+						p["vt"] = vt
+					}
+				}
+			}
+			if s, ok := p["v"].(string); ok {
+				p["v"] = moveURL(movePath(s))
+			}
+		}
+	}
+}
+
+// arrayOfMaps returns the elements of v that are JSON objects.
+func arrayOfMaps(v interface{}) []map[string]interface{} {
+	items, _ := v.([]interface{})
+	var out []map[string]interface{}
+	for _, it := range items {
+		if m, ok := it.(map[string]interface{}); ok {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func floatOf(v interface{}) float64 {
