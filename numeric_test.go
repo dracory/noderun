@@ -1,8 +1,8 @@
 package noderunner_test
 
 import (
-	"math"
 	"github.com/dracory/nodebase"
+	"math"
 	"testing"
 )
 

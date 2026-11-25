@@ -2,10 +2,10 @@ package noderunner_test
 
 import (
 	"context"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	"github.com/dracory/nodebase"
 	. "github.com/dracory/nodebase/function"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )

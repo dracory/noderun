@@ -2,10 +2,10 @@ package noderunner_test
 
 import (
 	"context"
+	. "github.com/dracory/noderun"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	. "github.com/dracory/noderun"
 	"testing"
 )
 

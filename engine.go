@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -156,7 +156,7 @@ type WorkflowEngine struct {
 	// StopWorkflow can drop a stopped run's correlations.
 	pendingWF map[string]string
 	// AllowOSEnv gates whether flows may read process environment
-	// variables — "env"-typed vars in group/subflow/flow/global env
+	// variables — "env"-typed vars in group/component/flow/global env
 	// layers and the env.get OS fallback in function nodes. Default
 	// off: a flow author should not be able to exfiltrate process
 	// secrets (DB DSNs, cloud credentials) via env.get. Enable via
@@ -173,7 +173,7 @@ type WorkflowEngine struct {
 	contextMem nodebase.ContextStore
 	// globalEnv holds the resolved global-config env vars (Node-RED
 	// parity: a deployment-wide env layer consulted by env.get after
-	// group/subflow/flow and before the OS environment). Set via
+	// group/component/flow and before the OS environment). Set via
 	// SetGlobalEnv — wired in main/api from the storage backend.
 	globalEnv map[string]interface{}
 	// nodeFactories holds engine-scoped node type registrations (see
@@ -326,7 +326,7 @@ func (e *WorkflowEngine) deployLock(workflowID string) *sync.Mutex {
 // stay live, only dirty node IDs are activated, and per-node state and
 // statuses survive for untouched nodebase.
 func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.WorkflowInterface, input nodestore.MessageInterface, mode DeployMode) (string, <-chan error, error) {
-	// Expand subflow instances into namespaced internal node copies
+	// Expand component instances into namespaced internal node copies
 	// before the run registers — the stored flow, statuses and node
 	// lookups all operate on the expanded graph. The expansion runs
 	// on a copy so callers holding the workflow (e.g. startWorkflow,

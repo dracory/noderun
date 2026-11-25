@@ -29,7 +29,7 @@ const (
 // affected nodes. nodestore.NodeInterface Position is ignored (a canvas move is not a
 // redeploy-worthy change); a change to workflow-level View defaults
 // (inbox capacity/durability) marks every node dirty. Callers pass
-// expanded graphs, so a subflow definition edit shows up as changed
+// expanded graphs, so a component definition edit shows up as changed
 // namespaced internal nodes.
 func flowDiff(oldFlow, newFlow nodestore.WorkflowInterface) map[string]bool {
 	dirty := make(map[string]bool)

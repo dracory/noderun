@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-// Module id migration (task module_id_migration): nodes
-// store data.module = module id; view.modules carries the entities
+// Child flow id migration (task childflow_id_migration): nodes
+// store data.childFlow = child flow id; view.childFlows carries the entities
 // {id,label,role,enabled,env}; legacy documents carry names. Every
-// consumer resolves either form through view.modules.
+// consumer resolves either form through view.childFlows.
 
-// TestModuleLabel — id resolves to the entity label; names and
+// TestChildFlowLabel — id resolves to the entity label; names and
 // unknown references pass through unchanged.
-func TestModuleLabel(t *testing.T) {
+func TestChildFlowLabel(t *testing.T) {
 	w := &Workflow{
 		View: map[string]interface{}{
 			"childFlows": []interface{}{
@@ -34,9 +34,9 @@ func TestModuleLabel(t *testing.T) {
 	}
 }
 
-// TestModuleRefMatches — references match across forms: id==id,
+// TestChildFlowRefMatches — references match across forms: id==id,
 // name==name, and id==name when the entity list maps them.
-func TestModuleRefMatches(t *testing.T) {
+func TestChildFlowRefMatches(t *testing.T) {
 	w := &Workflow{
 		View: map[string]interface{}{
 			"childFlows": []interface{}{
@@ -51,21 +51,21 @@ func TestModuleRefMatches(t *testing.T) {
 		t.Error("label should match its entity id")
 	}
 	if flowRefMatches(w, "mod-1", "Other") {
-		t.Error("different modules should not match")
+		t.Error("different child flows should not match")
 	}
 	if flowRefMatches(w, "", "Router") {
 		t.Error("empty ref should not match")
 	}
 }
 
-// TestDisabledModuleByID — a node whose data.module is a module id is
-// inert when view.disabledModules lists that id, and also when a
-// legacy name-valued disabledModules entry names the same module.
-func TestDisabledModuleByID(t *testing.T) {
+// TestDisabledChildFlowByID — a node whose data.childFlow is a child flow id is
+// inert when view.disabledFlows lists that id, and also when a
+// legacy name-valued disabledFlows entry names the same child flow.
+func TestDisabledChildFlowByID(t *testing.T) {
 	mk := func(disabled []interface{}) *Workflow {
 		return &Workflow{
 			ID:   "test-disabled-mod-id",
-			Name: "Disabled Module ID Flow",
+			Name: "Disabled Child Flow ID Flow",
 			Nodes: []Node{
 				{
 					ID:   "inj",
@@ -74,7 +74,7 @@ func TestDisabledModuleByID(t *testing.T) {
 						"payload":     "orig",
 						"payloadType": "str",
 						"once":        true,
-						"childFlow":      "mod-1",
+						"childFlow":   "mod-1",
 					},
 				},
 				{ID: "dbg", Type: "debug", Data: map[string]interface{}{"childFlow": "mod-1"}},
@@ -101,21 +101,21 @@ func TestDisabledModuleByID(t *testing.T) {
 		stoppers := len(engine.stoppers[workflow.ID])
 		engine.runMu.Unlock()
 		if stoppers != 0 {
-			t.Fatalf("disabledModules=%v: inject on a disabled module registered %d stoppers", disabled, stoppers)
+			t.Fatalf("disabledFlows=%v: inject on a disabled child flow registered %d stoppers", disabled, stoppers)
 		}
 		time.Sleep(200 * time.Millisecond)
 		_, nodes, _, _ := engine.GetWorkflowSnapshot(workflow.ID, 0)
 		if nodes["dbg"] == "ok" {
-			t.Fatalf("disabledModules=%v: node on a disabled module executed", disabled)
+			t.Fatalf("disabledFlows=%v: node on a disabled child flow executed", disabled)
 		}
 		_ = engine.StopWorkflow(workflow.ID)
 	}
 }
 
-// TestDisabledModuleEnabledFlag — a module entity flagged
+// TestDisabledChildFlowEnabledFlag — a child flow entity flagged
 // enabled:false disables every node on it even without a
-// disabledModules entry.
-func TestDisabledModuleEnabledFlag(t *testing.T) {
+// disabledFlows entry.
+func TestDisabledChildFlowEnabledFlag(t *testing.T) {
 	workflow := &Workflow{
 		ID:   "test-disabled-mod-enabled",
 		Name: "Disabled Enabled Flag Flow",
@@ -127,7 +127,7 @@ func TestDisabledModuleEnabledFlag(t *testing.T) {
 					"payload":     "orig",
 					"payloadType": "str",
 					"once":        true,
-					"childFlow":      "mod-1",
+					"childFlow":   "mod-1",
 				},
 			},
 			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"childFlow": "mod-1"}},
@@ -152,17 +152,17 @@ func TestDisabledModuleEnabledFlag(t *testing.T) {
 	stoppers := len(engine.stoppers[workflow.ID])
 	engine.runMu.Unlock()
 	if stoppers != 0 {
-		t.Fatalf("inject on an enabled:false module registered %d stoppers", stoppers)
+		t.Fatalf("inject on an enabled:false child flow registered %d stoppers", stoppers)
 	}
 }
 
-// TestExportNodeREDModuleID — id-keyed documents export with the
-// module label on the emitted tab and disabled tab flag resolved
-// through view.modules.
-func TestExportNodeREDModuleID(t *testing.T) {
+// TestExportNodeREDChildFlowID — id-keyed documents export with the
+// child flow label on the emitted tab and disabled tab flag resolved
+// through view.childFlows.
+func TestExportNodeREDChildFlowID(t *testing.T) {
 	w := &Workflow{
 		ID:   "wf-mod-id",
-		Name: "Module ID Export",
+		Name: "Child Flow ID Export",
 		Nodes: []Node{
 			{ID: "n1", Type: "inject", Data: map[string]interface{}{"childFlow": "mod-1"}},
 		},
@@ -191,9 +191,9 @@ func TestExportNodeREDModuleID(t *testing.T) {
 		t.Fatal("no tab object exported")
 	}
 	if tab["label"] != "Pages" {
-		t.Errorf("tab label = %v, want %q (resolved from module id)", tab["label"], "Pages")
+		t.Errorf("tab label = %v, want %q (resolved from child flow id)", tab["label"], "Pages")
 	}
 	if tab["disabled"] != true {
-		t.Error("id-listed disabledModules should export disabled:true on the tab")
+		t.Error("id-listed disabledFlows should export disabled:true on the tab")
 	}
 }

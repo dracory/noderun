@@ -1,8 +1,8 @@
 package noderunner
 
 import (
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // Module identity helpers (ported from flowrunner module.go).

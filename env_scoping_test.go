@@ -37,10 +37,10 @@ func TestEnvScopingChain(t *testing.T) {
 			"env": []interface{}{entry("flow")},
 			"groups": []interface{}{
 				map[string]interface{}{
-					"id":      "g1",
-					"childFlow":  "Home",
-					"nodeIds": []interface{}{"fn"},
-					"env":     []interface{}{entry("group")},
+					"id":        "g1",
+					"childFlow": "Home",
+					"nodeIds":   []interface{}{"fn"},
+					"env":       []interface{}{entry("group")},
 				},
 			},
 		},
@@ -183,9 +183,9 @@ func TestEnvScopingGroupComponentInner(t *testing.T) {
 		View: map[string]interface{}{
 			"groups": []interface{}{
 				map[string]interface{}{
-					"id":      "g1",
-					"childFlow":  "Home",
-					"nodeIds": []interface{}{"inst"},
+					"id":        "g1",
+					"childFlow": "Home",
+					"nodeIds":   []interface{}{"inst"},
 					"env": []interface{}{
 						map[string]interface{}{"name": "G_VAR", "type": "str", "value": "from-group"},
 					},

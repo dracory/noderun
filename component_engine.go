@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // Component engine support: ExpandComponents rewrites component instance nodes
@@ -17,18 +17,18 @@ import (
 
 const maxComponentDepth = 16
 
-// subflowWire is one endpoint inside a definition's in/out port:
+// componentWire is one endpoint inside a definition's in/out port:
 // {id: internalNodeId, port: sourcePortIndex (out only, 0-based)}.
-type subflowWire struct {
+type componentWire struct {
 	ID   string `json:"id"`
 	Port int    `json:"port"`
 }
 
-// subflowPort is one entry of a definition's in/out array.
-type subflowPort struct {
-	X     float64       `json:"x"`
-	Y     float64       `json:"y"`
-	Wires []subflowWire `json:"wires"`
+// componentPort is one entry of a definition's in/out array.
+type componentPort struct {
+	X     float64         `json:"x"`
+	Y     float64         `json:"y"`
+	Wires []componentWire `json:"wires"`
 }
 
 // componentEnvVar is one declared env entry: {name, type, value}.
@@ -38,20 +38,20 @@ type componentEnvVar struct {
 	Value interface{} `json:"value"`
 }
 
-// subflowDef is the parsed component definition node.
-type subflowDef struct {
+// componentDef is the parsed component definition node.
+type componentDef struct {
 	id    string
-	in    []subflowPort
-	out   []subflowPort
+	in    []componentPort
+	out   []componentPort
 	env   []componentEnvVar
 	nodes []nodestore.NodeInterface
 	edges []nodestore.EdgeInterface
 }
 
-// subflowInstance holds one instance's expansion result: the
+// componentInstance holds one instance's expansion result: the
 // namespaced internal nodes and edges plus the port endpoint lists
 // used to graft external edges onto the copy.
-type subflowInstance struct {
+type componentInstance struct {
 	nodes []nodestore.NodeInterface
 	edges []nodestore.EdgeInterface
 	// inTargets[i] lists the namespaced node ids an edge into the
@@ -59,7 +59,7 @@ type subflowInstance struct {
 	inTargets [][]string
 	// outSources[i] lists the namespaced {nodeId, port} pairs feeding
 	// the instance's output_{i+1} port.
-	outSources [][]subflowWire
+	outSources [][]componentWire
 }
 
 // nodestore.IsComponentInstance reports whether nodeType names a component instance
@@ -84,7 +84,7 @@ const maxExpandedNodes = 100000
 // definitions, out-of-range ports, recursive nesting and expansion
 // beyond maxExpandedNodes.
 func ExpandComponents(w nodestore.WorkflowInterface, allowOSEnv bool) error {
-	defs := map[string]*subflowDef{}
+	defs := map[string]*componentDef{}
 	var rest []nodestore.NodeInterface
 	for _, n := range w.GetNodes() {
 		if n.GetType() != componentDefNodeType {
@@ -103,7 +103,7 @@ func ExpandComponents(w nodestore.WorkflowInterface, allowOSEnv bool) error {
 	// still fail here with the clear "definition not found" error
 	// instead of dying later as an unknown node type.
 	budget := maxExpandedNodes
-	expandedNodes, edges, _, err := expandSubflowInstances(rest, w.GetEdges(), defs, nil, nil, allowOSEnv, &budget)
+	expandedNodes, edges, _, err := expandComponentInstances(rest, w.GetEdges(), defs, nil, nil, allowOSEnv, &budget)
 	if err != nil {
 		return err
 	}
@@ -113,20 +113,20 @@ func ExpandComponents(w nodestore.WorkflowInterface, allowOSEnv bool) error {
 }
 
 // parseComponentDef decodes a type:"component" node's Data into a
-// subflowDef. The definition payload uses the Node-RED field names:
+// componentDef. The definition payload uses the Node-RED field names:
 // name, in, out, env, meta, plus the engine's storage keys "nodes" and
 // "edges" for the internal graph. Internal nodes accept both the
 // backend shape ({id,type,position:{x,y},data:{...}}) and the
 // Node-RED flat shape ({id,type,x,y,...config}).
-func parseComponentDef(n nodestore.NodeInterface) (*subflowDef, error) {
+func parseComponentDef(n nodestore.NodeInterface) (*componentDef, error) {
 	raw, err := json.Marshal(n.GetData())
 	if err != nil {
 		return nil, fmt.Errorf("invalid definition data: %w", err)
 	}
 	var aux struct {
-		In    []subflowPort     `json:"in"`
-		Out   []subflowPort     `json:"out"`
-		Env   []componentEnvVar   `json:"env"`
+		In    []componentPort   `json:"in"`
+		Out   []componentPort   `json:"out"`
+		Env   []componentEnvVar `json:"env"`
 		Nodes []json.RawMessage `json:"nodes"`
 		Edges []json.RawMessage `json:"edges"`
 	}
@@ -134,7 +134,7 @@ func parseComponentDef(n nodestore.NodeInterface) (*subflowDef, error) {
 		return nil, fmt.Errorf("invalid definition data: %w", err)
 	}
 
-	def := &subflowDef{id: n.GetID(), in: aux.In, out: aux.Out, env: aux.Env}
+	def := &componentDef{id: n.GetID(), in: aux.In, out: aux.Out, env: aux.Env}
 	for i, rawNode := range aux.Nodes {
 		node, err := parseComponentInnerNode(rawNode)
 		if err != nil {
@@ -156,7 +156,7 @@ func parseComponentDef(n nodestore.NodeInterface) (*subflowDef, error) {
 // accepting both the backend ({position, data}) and the Node-RED flat
 // ({x, y, ...config}) shapes.
 
-// expandSubflowInstances replaces every component instance in nodes by
+// expandComponentInstances replaces every component instance in nodes by
 // the namespaced copy produced by def.expand, then rewires the edges:
 // an edge into an instance feeds the endpoint nodes of its in port,
 // an edge out of an instance carries the source nodes of its out port,
@@ -167,7 +167,7 @@ func parseComponentDef(n nodestore.NodeInterface) (*subflowDef, error) {
 // (env inheritance). The returned map is keyed by instance node id
 // and carries each instance's port endpoint lists — the caller needs
 // them to resolve ports pointing at a (now vanished) instance node.
-func expandSubflowInstances(srcNodes []nodestore.NodeInterface, edges []nodestore.EdgeInterface, defs map[string]*subflowDef, parentEnv map[string]interface{}, ancestry []string, allowOSEnv bool, budget *int) ([]nodestore.NodeInterface, []nodestore.EdgeInterface, map[string]*subflowInstance, error) {
+func expandComponentInstances(srcNodes []nodestore.NodeInterface, edges []nodestore.EdgeInterface, defs map[string]*componentDef, parentEnv map[string]interface{}, ancestry []string, allowOSEnv bool, budget *int) ([]nodestore.NodeInterface, []nodestore.EdgeInterface, map[string]*componentInstance, error) {
 	instanceIDs := map[string]bool{}
 	for _, n := range srcNodes {
 		if nodestore.IsComponentInstance(n.GetType()) {
@@ -188,7 +188,7 @@ func expandSubflowInstances(srcNodes []nodestore.NodeInterface, edges []nodestor
 		return nil, nil, nil, fmt.Errorf("component expansion exceeds %d nested levels", maxComponentDepth)
 	}
 
-	instances := map[string]*subflowInstance{}
+	instances := map[string]*componentInstance{}
 	var outNodes []nodestore.NodeInterface
 	var outEdges []nodestore.EdgeInterface
 	for _, n := range srcNodes {
@@ -268,7 +268,7 @@ func expandSubflowInstances(srcNodes []nodestore.NodeInterface, edges []nodestor
 // edgeTouchesSubflowDef reports whether e has an endpoint on a
 // definition node. Definitions are templates removed by expansion, so
 // such an edge would dangle in the deployed graph.
-func edgeTouchesSubflowDef(e nodestore.EdgeInterface, defs map[string]*subflowDef) (string, bool) {
+func edgeTouchesSubflowDef(e nodestore.EdgeInterface, defs map[string]*componentDef) (string, bool) {
 	if _, ok := defs[e.GetSource()]; ok {
 		return e.GetSource(), true
 	}
@@ -284,7 +284,7 @@ func edgeTouchesSubflowDef(e nodestore.EdgeInterface, defs map[string]*subflowDe
 // inside the copy expanded recursively — and the per-port endpoint
 // lists used to graft external edges. A port wire pointing at a
 // nested instance resolves through that instance's own port lists.
-func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*subflowDef, parentEnv map[string]interface{}, ancestry []string, allowOSEnv bool, budget *int) (*subflowInstance, error) {
+func (def *componentDef) expand(inst nodestore.NodeInterface, defs map[string]*componentDef, parentEnv map[string]interface{}, ancestry []string, allowOSEnv bool, budget *int) (*componentInstance, error) {
 	if len(def.nodes) == 0 {
 		return nil, fmt.Errorf("component instance %q: definition %q has no internal nodes", inst.GetID(), def.id)
 	}
@@ -317,7 +317,7 @@ func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*sub
 
 	// Nested instances expand recursively; edges referencing them are
 	// rewired through their own ports by the recursive call.
-	innerNodes, innerEdges, innerInstances, err := expandSubflowInstances(innerNodes, innerEdges, defs, env, ancestry, allowOSEnv, budget)
+	innerNodes, innerEdges, innerInstances, err := expandComponentInstances(innerNodes, innerEdges, defs, env, ancestry, allowOSEnv, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*sub
 		return nil, fmt.Errorf("component expansion exceeds %d expanded nodes", maxExpandedNodes)
 	}
 
-	result := &subflowInstance{nodes: innerNodes, edges: innerEdges}
+	result := &componentInstance{nodes: innerNodes, edges: innerEdges}
 
 	// Resolve the in/out port endpoints. A wire usually lands on an
 	// ordinary internal node; when it lands on a nested instance the
@@ -360,11 +360,11 @@ func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*sub
 		result.inTargets = append(result.inTargets, targets)
 	}
 	for _, port := range def.out {
-		var sources []subflowWire
+		var sources []componentWire
 		for _, w := range port.Wires {
 			nsID := idMap[w.ID]
 			if live[nsID] {
-				sources = append(sources, subflowWire{ID: nsID, Port: w.Port})
+				sources = append(sources, componentWire{ID: nsID, Port: w.Port})
 				continue
 			}
 			if nested, ok := innerInstances[nsID]; ok && w.Port < len(nested.outSources) {
@@ -378,7 +378,7 @@ func (def *subflowDef) expand(inst nodestore.NodeInterface, defs map[string]*sub
 
 // resolveSubflowEnv computes an instance's effective env: parent scope
 // (env inheritance) < definition defaults < instance overrides.
-func resolveSubflowEnv(def *subflowDef, inst nodestore.NodeInterface, parent map[string]interface{}, allowOSEnv bool) map[string]interface{} {
+func resolveSubflowEnv(def *componentDef, inst nodestore.NodeInterface, parent map[string]interface{}, allowOSEnv bool) map[string]interface{} {
 	env := make(map[string]interface{}, len(parent)+len(def.env))
 	for k, v := range parent {
 		env[k] = v
@@ -387,13 +387,13 @@ func resolveSubflowEnv(def *subflowDef, inst nodestore.NodeInterface, parent map
 		if ev.Name == "" {
 			continue
 		}
-		env[ev.Name] = subflowEnvValue(ev.Value, ev.Type, allowOSEnv)
+		env[ev.Name] = componentEnvValue(ev.Value, ev.Type, allowOSEnv)
 	}
 	for _, ev := range parseInstanceEnv(inst.GetData()["env"]) {
 		if ev.Name == "" {
 			continue
 		}
-		env[ev.Name] = subflowEnvValue(ev.Value, ev.Type, allowOSEnv)
+		env[ev.Name] = componentEnvValue(ev.Value, ev.Type, allowOSEnv)
 	}
 	return env
 }
@@ -432,11 +432,11 @@ func parseInstanceEnv(raw interface{}) []componentEnvVar {
 	return out
 }
 
-// subflowEnvValue applies the Node-RED env var typing: "num" and
+// componentEnvValue applies the Node-RED env var typing: "num" and
 // "bool" parse the string form, "json" parses JSON text, "env" reads a
 // process environment variable when allowOSEnv permits it (otherwise
 // resolves empty); "str"/"cred"/empty keep the raw value.
-func subflowEnvValue(v interface{}, typ string, allowOSEnv bool) interface{} {
+func componentEnvValue(v interface{}, typ string, allowOSEnv bool) interface{} {
 	str := ""
 	switch t := v.(type) {
 	case string:
@@ -629,11 +629,11 @@ func groupContains(g map[string]interface{}, nodeID string) bool {
 }
 
 // envListValue resolves one name out of a raw [{name,type,value}]
-// env list, applying the Node-RED env typing (subflowEnvValue).
+// env list, applying the Node-RED env typing (componentEnvValue).
 func envListValue(raw interface{}, name string, allowOSEnv bool) (interface{}, bool) {
 	for _, ev := range parseInstanceEnv(raw) {
 		if ev.Name == name {
-			return subflowEnvValue(ev.Value, ev.Type, allowOSEnv), true
+			return componentEnvValue(ev.Value, ev.Type, allowOSEnv), true
 		}
 	}
 	return nil, false
@@ -650,7 +650,7 @@ func (e *WorkflowEngine) SetGlobalEnv(raw interface{}) {
 		if ev.Name == "" {
 			continue
 		}
-		resolved[ev.Name] = subflowEnvValue(ev.Value, ev.Type, e.AllowOSEnv)
+		resolved[ev.Name] = componentEnvValue(ev.Value, ev.Type, e.AllowOSEnv)
 	}
 	e.runMu.Lock()
 	e.globalEnv = resolved

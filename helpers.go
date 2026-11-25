@@ -20,7 +20,7 @@ func messageWithError(m nodestore.MessageInterface, err *string) nodestore.Messa
 	return m
 }
 
-// cloneWorkflow shallow-copies a workflow so the deploy-time subflow
+// cloneWorkflow shallow-copies a workflow so the deploy-time component
 // expansion can rewrite its node/edge lists without writing the
 // expanded graph back into the caller's stored definition (flowrunner
 // copied the Workflow struct value for this).

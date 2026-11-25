@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // Local copies of small helpers that are unexported in package nodestore.

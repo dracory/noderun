@@ -2,10 +2,10 @@ package noderunner_test
 
 import (
 	"fmt"
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	"github.com/dracory/nodebase"
 	_ "github.com/dracory/nodebase/builtin"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 	"testing"
 	"time"
 )

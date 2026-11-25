@@ -171,7 +171,7 @@ func TestDisabledFlowTab(t *testing.T) {
 					"payload":     "orig",
 					"payloadType": "str",
 					"once":        true,
-					"childFlow":      "Tab2",
+					"childFlow":   "Tab2",
 				},
 			},
 			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"childFlow": "Tab2"}},

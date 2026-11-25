@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // waitForStatus polls the workflow snapshot until the node reaches the

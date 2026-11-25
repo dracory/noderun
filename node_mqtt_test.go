@@ -3,8 +3,8 @@ package noderunner
 import (
 	"context"
 	"fmt"
-	"net"
 	"github.com/dracory/nodebase"
+	"net"
 	"sync"
 	"testing"
 	"time"

@@ -9,9 +9,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	nodestore "github.com/dracory/nodestore"
-	. "github.com/dracory/noderun"
 	_ "github.com/dracory/nodebase/builtin"
+	. "github.com/dracory/noderun"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // neatInboxTestStore builds a NeatInboxStore on a private in-memory

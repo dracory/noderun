@@ -581,11 +581,11 @@ func NewBaseNode(id, nodeType string) *nodebase.BaseNode {
 	return nodebase.NewBaseNode(nodestore.NewNode(id, nodeType))
 }
 
-// nodeREDTabID mirrors flowrunner's deterministic module→tab id
-// (fnv-1a 32 of the module name, "tab%08x").
-func nodeREDTabID(module string) string {
+// nodeREDTabID mirrors flowrunner's deterministic child flow→tab id
+// (fnv-1a 32 of the child flow name, "tab%08x").
+func nodeREDTabID(childFlow string) string {
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(module))
+	_, _ = h.Write([]byte(childFlow))
 	return fmt.Sprintf("tab%08x", h.Sum32())
 }
 

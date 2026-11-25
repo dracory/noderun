@@ -2,8 +2,8 @@ package noderunner
 
 import (
 	"fmt"
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // This file implements per-node bounded inboxes at the send/traverse
@@ -129,7 +129,7 @@ func (b *memInboxBackend) Close() error { return nil }
 
 // nodeInboxConfig is the resolved capacity + policy for one node.
 type nodeInboxConfig struct {
-	capacity int                  // <=0 means unbounded
+	capacity int                     // <=0 means unbounded
 	policy   nodebase.OverflowPolicy // only consulted when capacity > 0
 }
 

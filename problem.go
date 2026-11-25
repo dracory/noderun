@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	nodestore "github.com/dracory/nodestore"
 	"github.com/dracory/nodebase"
+	nodestore "github.com/dracory/nodestore"
 )
 
 // This file implements the structural default error path — the Switch
