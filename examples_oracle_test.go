@@ -60,13 +60,46 @@ type oracleJSON struct {
 }
 
 // oracleDifference accepts one event-level difference: file +
-// upstream node id + message must all match (exact strings). Note is
+// upstream node id + normalized message must all match. Note is
 // required.
 type oracleDifference struct {
 	File string
 	Node string // upstream node id; empty = any node
-	Msg  string // empty = any message (with Node set, accepts all events of that node)
+	Msg  string // exact event message after normalisation; empty matches only an empty message
 	Note string
+}
+
+// oracleHTMLH1 is the exact html body the Node-RED example templates
+// render for their <h1> greeting pages.
+func oracleHTMLH1(text string) string {
+	return "<html>\n    <head></head>\n    <body>\n        <h1>" + text + "</h1>\n    </body>\n</html>"
+}
+
+// oracleHTTPResponseMsg builds the canonical normalized form of this
+// engine's http-request response object. duration and Date are absent
+// because normOracleMsg scrubs those volatile fields before comparison.
+func oracleHTTPResponseMsg(body, contentLength, contentType, status string, statusCode int, extraHeaders ...map[string][]string) string {
+	headers := map[string][]string{
+		"Content-Length": {contentLength},
+		"Content-Type":   {contentType},
+	}
+	if len(extraHeaders) > 0 {
+		for k, v := range extraHeaders[0] {
+			headers[k] = v
+		}
+	}
+	payload := map[string]interface{}{
+		"body":          body,
+		"bodyTruncated": false,
+		"headers":       headers,
+		"status":        status,
+		"statusCode":    statusCode,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		panic(err)
+	}
+	return string(raw)
 }
 
 // oracleDifferences is the named-difference list — the only place
@@ -75,48 +108,64 @@ var oracleDifferences = []oracleDifference{
 	// --- http: response payload shape & request-context gaps ---
 	// httpRequest emits a response object {body, statusCode, headers,…}
 	// while Node-RED puts the response body directly in msg.payload
-	// (ret:"txt"), so the recorded html body and the emitted JSON map
-	// never match on these debug nodes.
-	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: "",
-		Note: "httpRequest wraps the body in a response object; Node-RED places it in msg.payload"},
-	{File: "network/http/01 - Create HTTP endpoint.json", Node: "188bc18.5487a3f", Msg: "",
-		Note: "same response-object wrapper; also msg.url from inject props lands in metadata, not payload"},
+	// (ret:"txt"). Each residual names both exact sides of the divergence;
+	// volatile duration/Date fields are scrubbed before comparison.
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: oracleHTMLH1("Hello World!"),
+		Note: "oracle-side residual: Node-RED places the response body directly in msg.payload"},
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "18b48ed8.1072e1", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello World!"), "85", "application/json", "200 OK", 200),
+		Note: "actual-side residual: httpRequest wraps the body in a response object"},
+	{File: "network/http/01 - Create HTTP endpoint.json", Node: "188bc18.5487a3f", Msg: oracleHTMLH1("Hello World!"),
+		Note: "oracle-side residual: the second request should render the endpoint body; goflow keeps msg.url in metadata so that request never runs"},
 	{File: "network/http/01 - Create HTTP endpoint.json", Node: "", Msg: "invalid input data format",
-		Note: "second httpRequest rejects the inject message — msg.url arrives in metadata, not the payload map"},
-	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: "",
-		Note: "query parameters are not exposed to the template as req.query.*; response is the wrapper object"},
-	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: "",
-		Note: "route parameters are not exposed to the template as req.params.*; response is the wrapper object"},
-	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: "",
-		Note: "request headers are not exposed to the template as req.headers.*; response is the wrapper object"},
-	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: "",
-		Note: "httpTrigger JSON-decodes request bodies — a plain-text POST is rejected with 400 (Node-RED accepts raw bodies)"},
+		Note: "actual-side residual: second httpRequest rejects the inject message — msg.url arrives in metadata, not the payload map"},
+	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: oracleHTMLH1("Hello Nick!"),
+		Note: "oracle-side residual: Node-RED exposes req.query.name to the template"},
+	{File: "network/http/02 - Handle query parameters.json", Node: "f523b8e.b5c8c48", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello !"), "80", "application/json", "200 OK", 200),
+		Note: "actual-side residual: query parameters are not exposed as req.query.* and the response is wrapped"},
+	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: oracleHTMLH1("Hello Nick!"),
+		Note: "oracle-side residual: Node-RED exposes req.params.name to the template"},
+	{File: "network/http/03 - Handle URL parameters.json", Node: "70c0eba4.5f0dc4", Msg: oracleHTTPResponseMsg(oracleHTMLH1("Hello !"), "80", "application/json", "200 OK", 200),
+		Note: "actual-side residual: route parameters are not exposed as req.params.* and the response is wrapped"},
+	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: oracleHTMLH1("User agent: Node-RED"),
+		Note: "oracle-side residual: Node-RED exposes req.headers.user-agent to the template"},
+	{File: "network/http/04 - Access HTTP request headers.json", Node: "65b13d57.700074", Msg: oracleHTTPResponseMsg(oracleHTMLH1("User agent: "), "85", "application/json", "200 OK", 200),
+		Note: "actual-side residual: request headers are not exposed as req.headers.* and the response is wrapped"},
+	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: oracleHTMLH1("Hello Nick"),
+		Note: "oracle-side residual: Node-RED accepts the plain-text POST body and renders the greeting"},
+	{File: "network/http/05 - Post data to a flow.json", Node: "7c2812c.c6ee7ec", Msg: oracleHTTPResponseMsg("Invalid request body\n", "21", "text/plain; charset=utf-8", "400 Bad Request", 400, map[string][]string{"X-Content-Type-Options": {"nosniff"}}),
+		Note: "actual-side residual: httpTrigger JSON-decodes request bodies, so the plain-text POST is rejected with 400"},
 
 	// --- udp: real round-trip emits an event the recorder missed ---
-	{File: "network/udp/01 - Transfer data using UDP protocol.json", Node: "d98b60d3.7331e", Msg: "",
-		Note: "the real UDP datagram round-trip reaches debug; the oracle recording captured no events for this flow"},
+	{File: "network/udp/01 - Transfer data using UDP protocol.json", Node: "d98b60d3.7331e", Msg: "Hello, World!",
+		Note: "actual-side residual: the real UDP datagram round-trip reaches debug; the oracle recording captured no events for this flow"},
 
-	// --- storage: fixture-path & encoding residuals ---
-	{File: "storage/read file/02 - Read data in specified encoding.json", Node: "d28c8994.99c0a8", Msg: "",
-		Note: "fileIn 'encoding':'base64' output encoding is not applied — payload is the decoded text"},
+	// --- storage: encoding, sequencing, and error-shape residuals ---
+	{File: "storage/read file/02 - Read data in specified encoding.json", Node: "d28c8994.99c0a8", Msg: "8J+YgAo=",
+		Note: "oracle-side residual: Node-RED honors fileIn encoding:base64"},
+	{File: "storage/read file/02 - Read data in specified encoding.json", Node: "d28c8994.99c0a8", Msg: "😀\n",
+		Note: "actual-side residual: fileIn emits decoded text instead of the requested base64 encoding"},
 	{File: "storage/read file/03 - Read data breaking lines into messages.json", Node: "7ed8282c.92b338", Msg: "",
-		Note: "Node-RED emits a trailing empty line after the final newline; ours does not (wildcard also covers the matching lines)"},
-	{File: "storage/read file/04 - Create a message stream.json", Node: "c48d8ae0.9ff3a8", Msg: "",
-		Note: "join + conditional switch chain emits no event — engine gap in join/switch parts semantics"},
-	{File: "storage/watch/01 - Watch change of a file.json", Node: "a91562b9.ca805", Msg: "",
-		Note: "watch reports the absolute fixture path; the harness stages it under t.TempDir"},
-	{File: "storage/watch/02 - Watch change in a directory.json", Node: "cbfb788b.297f98", Msg: "",
-		Note: "watch node emits no error event for a missing watched directory (Node-RED does)"},
-	{File: "storage/watch/02 - Watch change in a directory.json", Node: "137d60e2.0e267f", Msg: "",
-		Note: "file-write error text embeds the staged temp path and differs in wording from Node-RED"},
-	{File: "storage/watch/02 - Watch change in a directory.json", Node: "655d7bab.cda6f4", Msg: "",
-		Note: "file-write error text embeds the staged temp path and differs in wording from Node-RED"},
-	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "402f3b7e.988014", Msg: "",
-		Note: "inject props land in message metadata, not msg.filename — file node reports 'filename is empty'"},
-	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "97b6b6b2.a54b38", Msg: "",
-		Note: "consequence of the above: the read side never produces the recorded body"},
-	{File: "storage/write file/04 - Specify encoding of written data.json", Node: "2e814354.278c8c", Msg: "",
-		Note: "written-file encoding/newline detail differs (msg text identical modulo invisible bytes)"},
+		Note: "oracle-side residual: Node-RED emits a trailing empty line after the final newline; ours does not"},
+	{File: "storage/read file/04 - Create a message stream.json", Node: "c48d8ae0.9ff3a8", Msg: "Apple\nBanana\n",
+		Note: "oracle-side residual: join + conditional switch chain emits no event — engine gap in join/switch parts semantics"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "cbfb788b.297f98", Msg: `{"__enc__":true,"type":"error","data":{"name":"Error","message":"/tmp/HG does not exist.","stack":"Error: /tmp/HG does not exist.\n    at /usr/src/node-red/node_modules/node-watch/lib/watch.js:494:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)"}}`,
+		Note: "oracle-side residual: watch node emits an error event for a missing watched directory (Node-RED does); ours does not"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "137d60e2.0e267f", Msg: "failed to write to file: Error: ENOENT: no such file or directory, open '/tmp/HG/hello.txt'",
+		Note: "oracle-side residual: Node-RED file-write error wording for hello.txt"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "137d60e2.0e267f", Msg: "file node open failed: open /tmp/HG/hello.txt: no such file or directory",
+		Note: "actual-side residual: goflow file-write error wording for hello.txt differs from Node-RED"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "655d7bab.cda6f4", Msg: "failed to write to file: Error: ENOENT: no such file or directory, open '/tmp/HG/goodbye.txt'",
+		Note: "oracle-side residual: Node-RED file-write error wording for goodbye.txt"},
+	{File: "storage/watch/02 - Watch change in a directory.json", Node: "655d7bab.cda6f4", Msg: "file node open failed: open /tmp/HG/goodbye.txt: no such file or directory",
+		Note: "actual-side residual: goflow file-write error wording for goodbye.txt differs from Node-RED"},
+	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "402f3b7e.988014", Msg: "filename is empty",
+		Note: "actual-side residual: inject props land in message metadata, not msg.filename — file node reports 'filename is empty'"},
+	{File: "storage/write file/02 - Write string to a file specified by property.json", Node: "97b6b6b2.a54b38", Msg: "Hello, World!\n",
+		Note: "oracle-side residual: because msg.filename is metadata-only, the write/read chain never produces the recorded body"},
+	{File: "storage/write file/04 - Specify encoding of written data.json", Node: "2e814354.278c8c", Msg: "😀",
+		Note: "oracle-side residual: Node-RED reads back the written emoji without an added newline"},
+	{File: "storage/write file/04 - Specify encoding of written data.json", Node: "2e814354.278c8c", Msg: "😀\n",
+		Note: "actual-side residual: written-file encoding/newline detail differs — goflow reads back a trailing newline"},
 
 	// --- function node sandbox gap surfaced by error events ---
 	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:5:20(38)",
@@ -248,6 +297,9 @@ func TestNodeREDExampleOracle(t *testing.T) {
 	accepted := map[int]bool{}         // oracleDifferences indexes actually used
 	flowTolerated := map[string]bool{} // oracleFlowDifferences files actually used
 	var failures int
+	var clean int
+	var eventLevelTolerated int
+	var flowLevelTolerated int
 	for _, of := range orc.Flows {
 		path, ok := files[of.File]
 		if !ok {
@@ -261,16 +313,24 @@ func TestNodeREDExampleOracle(t *testing.T) {
 			if runErr != nil {
 				if flowTol {
 					flowTolerated[of.File] = true
+					flowLevelTolerated++
 					return
 				}
 				t.Error(runErr)
 				failures++
 				return
 			}
+			beforeAccepted := len(accepted)
 			missing, extra := diffOracle(t, of, got, accepted)
 			if flowTol && len(missing)+len(extra) > 0 {
 				flowTolerated[of.File] = true
+				flowLevelTolerated++
 				return
+			}
+			if len(accepted) > beforeAccepted {
+				eventLevelTolerated++
+			} else if len(missing)+len(extra) == 0 {
+				clean++
 			}
 			for _, m := range missing {
 				t.Errorf("missing debug event (real Node-RED emitted): name=%q node=%s msg=%s", m.Name, m.Node, trunc(m.Msg, 120))
@@ -294,7 +354,24 @@ func TestNodeREDExampleOracle(t *testing.T) {
 			t.Errorf("flow tolerance never used — remove it or investigate: %s (%s)", file, note)
 		}
 	}
-	t.Logf("%d/%d oracle flows matched", len(orc.Flows)-failures, len(orc.Flows))
+	t.Logf("%d/%d oracle flows passed without accepted differences; %d used event-level differences; %d used flow-level differences; %d had unaccepted differences/errors",
+		clean, len(orc.Flows), eventLevelTolerated, flowLevelTolerated, failures)
+}
+
+func TestOracleDifferenceEmptyMsgDoesNotWildcardNode(t *testing.T) {
+	file := "storage/read file/03 - Read data breaking lines into messages.json"
+	node := "7ed8282c.92b338"
+	of := oracleFlow{File: file, Debug: []oracleDebugEvent{
+		{Node: node, Msg: "one"},
+		{Node: node, Msg: ""},
+	}}
+	missing, extra := diffOracle(t, of, nil, map[int]bool{})
+	if len(extra) != 0 {
+		t.Fatalf("unexpected extra events: %#v", extra)
+	}
+	if len(missing) != 1 || missing[0].Msg != "one" {
+		t.Fatalf("empty-message tolerance hid non-empty events; missing=%#v", missing)
+	}
 }
 
 // runOracleFlow deploys one example and returns its debug events in
@@ -430,11 +507,15 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) (events []oracleDeb
 
 	_, _, snap, _ := engine.GetWorkflowSnapshot(w.GetID(), 0)
 	var got []oracleDebugEvent
+	fixturePrefix := filepath.ToSlash(fixtureDir)
 	for _, ev := range snap {
 		// The oracle records both debug output and node-level errors
-		// (the recorder captures what Node-RED surfaces per node).
+		// (the recorder captures what Node-RED surfaces per node). Fixture
+		// paths are harness artifacts: map the private temp dir back onto
+		// Node-RED's /tmp before comparing event text.
 		if (ev.Level == "debug" || ev.Level == "error") && ev.NodeID != "" {
-			got = append(got, oracleDebugEvent{Node: importedToUpstream[ev.NodeID], Name: ev.NodeName, Msg: ev.Message})
+			msg := strings.ReplaceAll(ev.Message, fixturePrefix, "/tmp")
+			got = append(got, oracleDebugEvent{Node: importedToUpstream[ev.NodeID], Name: ev.NodeName, Msg: msg})
 		}
 	}
 	return got, nil
@@ -538,11 +619,12 @@ func startOracleHTTPListener(t *testing.T) (nodebase.HTTPRouter, string) {
 //     config and inject props) are rewritten to the live listener.
 func stageOracleFixtures(n map[string]interface{}, fixtureDir, httpBase string) {
 	movePath := func(s string) string {
+		base := filepath.ToSlash(fixtureDir)
 		if s == "/tmp" {
-			return fixtureDir
+			return base
 		}
 		if strings.HasPrefix(s, "/tmp/") {
-			return filepath.Join(fixtureDir, s[len("/tmp/"):])
+			return filepath.ToSlash(filepath.Join(base, s[len("/tmp/"):]))
 		}
 		return s
 	}
@@ -632,7 +714,7 @@ func diffOracle(t *testing.T, of oracleFlow, got []oracleDebugEvent, accepted ma
 			if d.Node != "" && d.Node != ev.Node {
 				continue
 			}
-			if d.Msg != "" && d.Msg != ev.Msg {
+			if normOracleMsg(d.Msg) != normOracleMsg(ev.Msg) {
 				continue
 			}
 			accepted[i] = true
@@ -686,11 +768,40 @@ func normOracleMsg(s string) string {
 			return s // scalars/strings compare literally
 		}
 	}
+	scrubOracleVolatile(v)
 	raw, err := json.Marshal(v)
 	if err != nil {
 		return s
 	}
 	return string(raw)
+}
+
+// scrubOracleVolatile removes harness/runtime timestamps that are not
+// behavioral differences: http-request durations and Date response
+// headers change on every run, even when the flow is correct.
+func scrubOracleVolatile(v interface{}) {
+	switch x := v.(type) {
+	case map[string]interface{}:
+		// Only the http-request response wrapper has volatile runtime
+		// metadata. Do not scrub ordinary payloads that happen to contain
+		// a meaningful "duration" field.
+		_, hasBody := x["body"]
+		_, hasBodyTruncated := x["bodyTruncated"]
+		_, hasStatus := x["status"]
+		_, hasStatusCode := x["statusCode"]
+		headers, hasHeaders := x["headers"].(map[string]interface{})
+		if hasBody && hasBodyTruncated && hasStatus && hasStatusCode && hasHeaders {
+			delete(x, "duration")
+			delete(headers, "Date")
+		}
+		for _, child := range x {
+			scrubOracleVolatile(child)
+		}
+	case []interface{}:
+		for _, child := range x {
+			scrubOracleVolatile(child)
+		}
+	}
 }
 
 func trunc(s string, n int) string {
