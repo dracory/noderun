@@ -153,7 +153,14 @@ func (e *WorkflowEngine) notifyComplete(workflowID, fromNodeID string, in nodest
 		return
 	}
 	for _, completeID := range e.NodesInScope(workflowID, fromNodeID, "complete") {
-		payload := nodestore.NewMessage().SetPayload(map[string]interface{}{"complete": true}).SetMetadata(map[string]interface{}{"fromComplete": true}).SetTimestamp(time.Now())
+		// Node-RED parity: the complete node receives a clone of the
+		// completed message, flagged so its own drain cannot re-fire.
+		metadata := map[string]interface{}{"fromComplete": true}
+		for k, v := range in.GetMetadata() {
+			metadata[k] = v
+		}
+		metadata["fromComplete"] = true
+		payload := nodestore.NewMessage().SetPayload(in.GetPayload()).SetMetadata(metadata).SetTimestamp(time.Now())
 		_ = e.Emit(workflowID, completeID, payload, nil)
 	}
 }
