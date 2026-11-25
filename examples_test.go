@@ -11,9 +11,9 @@ package noderunner_test
 //
 // Hermetic by default: with no examples present the suite skips.
 // Resolve the examples dir in this order:
-//  1. GOFLOW_EXAMPLES_DIR — a local path containing the .json files
+//  1. NODERUN_EXAMPLES_DIR — a local path containing the .json files
 //  2. testdata/nodered-examples/ — previously fetched files
-//  3. GOFLOW_EXAMPLES_FETCH=1 — fetch from GitHub into testdata/ and run
+//  3. NODERUN_EXAMPLES_FETCH=1 — fetch from GitHub into testdata/ and run
 //
 // Honesty rule: every tolerated failure is a NAMED entry in
 // exampleExpectations below with a written reason — silent xfails are
@@ -81,7 +81,7 @@ func TestNodeREDExampleFlows(t *testing.T) {
 	dir := examplesDir(t)
 	files := exampleFiles(t, dir)
 	if len(files) == 0 {
-		t.Skip("no example .json files found — set GOFLOW_EXAMPLES_DIR or GOFLOW_EXAMPLES_FETCH=1")
+		t.Skip("no example .json files found — set NODERUN_EXAMPLES_DIR or NODERUN_EXAMPLES_FETCH=1")
 	}
 	t.Logf("running %d example flows from %s", len(files), dir)
 
@@ -100,20 +100,20 @@ func TestNodeREDExampleFlows(t *testing.T) {
 // examplesDir resolves the examples directory per the env contract.
 func examplesDir(t *testing.T) string {
 	t.Helper()
-	dir := os.Getenv("GOFLOW_EXAMPLES_DIR")
+	dir := os.Getenv("NODERUN_EXAMPLES_DIR")
 	if dir == "" {
 		dir = filepath.Join("testdata", "nodered-examples")
 	}
 	if _, err := os.Stat(dir); err == nil {
 		return dir
 	}
-	if os.Getenv("GOFLOW_EXAMPLES_FETCH") == "1" {
+	if os.Getenv("NODERUN_EXAMPLES_FETCH") == "1" {
 		if err := fetchExampleFiles(dir); err != nil {
 			t.Fatalf("fetch examples: %v", err)
 		}
 		return dir
 	}
-	t.Skip("example flows not fetched — set GOFLOW_EXAMPLES_DIR or GOFLOW_EXAMPLES_FETCH=1")
+	t.Skip("example flows not fetched — set NODERUN_EXAMPLES_DIR or NODERUN_EXAMPLES_FETCH=1")
 	return ""
 }
 

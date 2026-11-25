@@ -8,7 +8,7 @@ import (
 
 // TestSwitchSpec ports assertions from
 // test/nodes/core/function/10-switch_spec.js (upstream describe
-// "switch Node"). Upstream routes msg.payload; GoFlow rules evaluate a
+// "switch Node"). Upstream routes msg.payload; the engine's rules evaluate a
 // dotted property path inside the payload object — the ported cases
 // use property "v" to stand in for msg.payload. Port routing is
 // observed via per-port debug sinks.

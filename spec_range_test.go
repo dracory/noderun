@@ -10,9 +10,9 @@ import (
 // TestRangeSpec ports assertions from
 // test/nodes/core/function/16-range_spec.js (upstream describe
 // "range Node"). The upstream genericRangeTest sends one message and
-// checks the mapped payload — the GoFlow equivalent drives the
+// checks the mapped payload — the engine's equivalent drives the
 // RangeNode executor directly. Where upstream reports a non-number via
-// node.log and drops the message, GoFlow returns a node error
+// node.log and drops the message, the engine returns a node error
 // (catchable); both refuse to forward the message, so the ported
 // assertions check (nil, err).
 func TestRangeSpec(t *testing.T) {
@@ -189,7 +189,7 @@ func TestRangeSpec(t *testing.T) {
 		})
 
 		s.it("drops and reports null rather than scaling it as 0", func(t *testing.T) {
-			// GoFlow cannot distinguish a null payload from an absent
+			// the engine cannot distinguish a null payload from an absent
 			// one — nil Data takes the missing-property passthrough path
 			// instead of upstream's report-and-drop.
 			skipf(t, "nil Data is treated as payload-not-present (passthrough), not null")

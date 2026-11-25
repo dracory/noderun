@@ -10,7 +10,7 @@
 // below, which (a) maps each title through sanitizeName for the Go
 // test name and (b) records the ORIGINAL title plus the outcome
 // (covered | skipped | failed) in an in-memory registry. When the
-// environment variable GOFLOW_SPEC_MANIFEST points at a file,
+// environment variable NODERUN_SPEC_MANIFEST points at a file,
 // TestSpecManifest (zz_manifest_test.go, always last) dumps that
 // registry as JSON for the generator.
 //

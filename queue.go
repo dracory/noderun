@@ -13,7 +13,7 @@ import (
 )
 
 // This file implements the queue node (decision
-// 2026_11_23_folder_node): a named, durable, inspectable staging queue
+// folder_node): a named, durable, inspectable staging queue
 // between elements — Enfocus Switch's staging-point model applied to
 // messages.
 //

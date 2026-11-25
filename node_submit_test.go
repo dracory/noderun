@@ -314,7 +314,7 @@ func TestSubmitValidate(t *testing.T) {
 		t.Fatalf("empty config must normalize, got %v", err)
 	}
 	// Default normalization (path /submit, maxSize cap) is covered by
-	// the internal test in pkg/nodestore/nodes/submitin.
+	// the internal test in nodebase/submitin.
 }
 
 // TestSubmitMainListener — a submitIn with listener "main" accepts

@@ -15,7 +15,7 @@ import (
 
 // NodeEvent is a single timestamped entry in a workflow's execution
 // log — an alias of the runner-agnostic nodebase.NodeEvent contract so
-// admin surfaces (pkg/nodeadmin/api) can consume workflow events
+// admin surfaces (nodeadmin/api) can consume workflow events
 // without importing this package.
 type NodeEvent = nodebase.NodeEvent
 
@@ -70,16 +70,16 @@ type WorkflowEngine struct {
 	// seq is the global event/message sequence counter
 	seq int64
 	// AllowExec gates the exec node's arbitrary command execution.
-	// Default off; enable via GOFLOW_ALLOW_EXEC=1 (wired in main).
+	// Default off; enabled by the consuming application (wired in main).
 	AllowExec bool
 	// FileRoot restricts file/fileIn node paths to a root directory.
-	// Empty means unrestricted; set via GOFLOW_FILE_ROOT (wired in main).
+	// Empty means unrestricted; set by the consuming application (wired in main).
 	FileRoot string
 	// HTTPAuthenticator authenticates requests arriving at node-served
 	// HTTP listeners (submitIn auth "admin"). It returns the
 	// authenticated username — stamped into msg.submit.submittedBy.
 	// Nil means no credentials are configured; wired in main from the
-	// same GOFLOW_AUTH_FILE the admin UI uses.
+	// same auth-file env var the consuming application's admin UI uses.
 	HTTPAuthenticator func(r *http.Request) (username string, ok bool)
 	// nodebase.HTTPRouter is the optional shared-listener seam (see
 	// http_router.go): when installed, httpTrigger/submitIn nodes
@@ -89,7 +89,7 @@ type WorkflowEngine struct {
 	// activation. Wired in main from the admin's router adapter.
 	HTTPRouter nodebase.HTTPRouter
 	// RunnerID identifies this process for lease coordination.
-	// Defaults to the OS hostname; override via GOFLOW_RUNNER_ID.
+	// Defaults to the OS hostname; override via the consuming application's runner-id env var.
 	RunnerID string
 	// RunnerVersion is stamped into the runners table on heartbeat.
 	RunnerVersion string
@@ -140,7 +140,7 @@ type WorkflowEngine struct {
 	// traversal halts (runaway-loop guard). 0 falls back to
 	// DefaultMaxSteps; <0 disables the quota. Per-workflow
 	// workflow.GetView()["maxSteps"] overrides it (same semantics).
-	// Wired in main via GOFLOW_MAX_STEPS.
+	// Wired in main by the consuming application.
 	MaxSteps int
 	// MaxInflightTraversals bounds concurrently running message
 	// traversals (inject/Emit/DeliverSync): each external injection
@@ -148,7 +148,7 @@ type WorkflowEngine struct {
 	// per hop, so an unbounded flood is a goroutine + write
 	// amplification DoS. 0 falls back to
 	// DefaultMaxInflightTraversals; <0 disables the bound.
-	// Wired in main via GOFLOW_MAX_INFLIGHT.
+	// Wired in main by the consuming application.
 	MaxInflightTraversals int
 	// inflight counts currently running traversals (runMu).
 	inflight int
@@ -160,7 +160,7 @@ type WorkflowEngine struct {
 	// layers and the env.get OS fallback in function nodes. Default
 	// off: a flow author should not be able to exfiltrate process
 	// secrets (DB DSNs, cloud credentials) via env.get. Enable via
-	// GOFLOW_ALLOW_OS_ENV=1 (wired in main) — mirrors AllowExec.
+	// the consuming application's opt-in env var (wired in main) — mirrors AllowExec.
 	AllowOSEnv bool
 	// nodebase.ContextStore persists function-node context (node/flow/global
 	// scopes) across engine restarts and undeploy/redeploy — wired in
@@ -355,7 +355,7 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 		nodestore.ApplyWorkflowCredentials(workflow, creds)
 	}
 
-	// Claim the DB lease first — when several goflow runners share one
+	// Claim the DB lease first — when several engine runners share one
 	// database, only the lease holder may run a workflow. No-op when
 	// no LeaseStore is configured.
 	if err := e.claimLease(workflow.GetID()); err != nil {
@@ -1088,7 +1088,7 @@ func (e *WorkflowEngine) GetOrCreateNodeState(workflowID, nodeID string, factory
 }
 
 // DefaultMaxSteps is the fallback step quota when neither the engine
-// (MaxSteps / GOFLOW_MAX_STEPS) nor the workflow (view "maxSteps")
+// (MaxSteps engine option) nor the workflow (view "maxSteps")
 // configures one. A wired cycle re-executes nodes until this trips.
 const DefaultMaxSteps = 10000
 

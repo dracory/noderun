@@ -8,7 +8,7 @@ import (
 
 // TestDelaySpec ports assertions from
 // test/nodes/core/function/89-delay_spec.js (upstream describe
-// "delay Node"). GoFlow's delay node is a fixed millisecond delay —
+// "delay Node"). the engine's delay node is a fixed millisecond delay —
 // everything else upstream covers (unit-scaled delays, rate limiting,
 // queue flush/reset) is registered as skipped.
 func TestDelaySpec(t *testing.T) {

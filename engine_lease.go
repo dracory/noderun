@@ -16,7 +16,7 @@ type Lease struct {
 	Generation int64     `json:"generation"`
 }
 
-// Runner describes a goflow process registered in the shared store.
+// Runner describes an engine process registered in the shared store.
 type Runner struct {
 	RunnerID     string    `json:"runner_id"`
 	Hostname     string    `json:"hostname"`

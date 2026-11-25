@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Module id migration (task 2026_11_23_module_id_migration): nodes
+// Module id migration (task module_id_migration): nodes
 // store data.module = module id; view.modules carries the entities
 // {id,label,role,enabled,env}; legacy documents carry names. Every
 // consumer resolves either form through view.modules.

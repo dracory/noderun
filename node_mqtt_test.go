@@ -65,10 +65,10 @@ func TestMQTTRoundTrip(t *testing.T) {
 		ID:   "test-mqtt-flow",
 		Name: "MQTT Flow",
 		Nodes: []Node{
-			{ID: "min", Type: "mqttIn", Data: map[string]interface{}{"broker": "127.0.0.1:1883", "topic": "goflow/test/#"}},
+			{ID: "min", Type: "mqttIn", Data: map[string]interface{}{"broker": "127.0.0.1:1883", "topic": "noderun/test/#"}},
 			{ID: "lg", Type: "log", Data: map[string]interface{}{"message": "got"}},
 			{ID: "inj", Type: "inject", Data: map[string]interface{}{"payload": `"ping"`, "once": true}},
-			{ID: "mout", Type: "mqttOut", Data: map[string]interface{}{"broker": "127.0.0.1:1883", "topic": "goflow/test/x"}},
+			{ID: "mout", Type: "mqttOut", Data: map[string]interface{}{"broker": "127.0.0.1:1883", "topic": "noderun/test/x"}},
 		},
 		Edges: []Edge{
 			{ID: "e1", Source: "min", Target: "lg"},
@@ -132,7 +132,7 @@ func TestMQTTSharedSubscriptionDisjoint(t *testing.T) {
 	requireMQTTBroker(t)
 
 	const broker = "127.0.0.1:1883"
-	const filter = "$share/goflowtest/goflow/shared/t"
+	const filter = "/noderuntest/noderun/shared/t"
 	const nMsgs = 20
 
 	var mu sync.Mutex
@@ -157,18 +157,18 @@ func TestMQTTSharedSubscriptionDisjoint(t *testing.T) {
 		}
 		return c
 	}
-	c1 := sub("goflow-share-1")
+	c1 := sub("noderun-share-1")
 	defer c1.Disconnect(500)
-	c2 := sub("goflow-share-2")
+	c2 := sub("noderun-share-2")
 	defer c2.Disconnect(500)
 
-	pub, err := nodebase.MQTTConnect(broker, "goflow-share-pub", "", "")
+	pub, err := nodebase.MQTTConnect(broker, "noderun-share-pub", "", "")
 	if err != nil {
 		t.Fatalf("connect publisher: %v", err)
 	}
 	defer pub.Disconnect(500)
 	for i := 0; i < nMsgs; i++ {
-		tok := pub.Publish("goflow/shared/t", 1, false, fmt.Sprintf("m%d", i))
+		tok := pub.Publish("noderun/shared/t", 1, false, fmt.Sprintf("m%d", i))
 		if !tok.WaitTimeout(10*time.Second) || tok.Error() != nil {
 			t.Fatalf("publish %d: %v", i, tok.Error())
 		}

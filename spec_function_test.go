@@ -153,13 +153,13 @@ func TestFunctionSpec(t *testing.T) {
 		})
 
 		s.it("should allow accessing env vars", func(t *testing.T) {
-			t.Setenv("GOFLOW_SPEC_FN_ENV", "fn-seekrit")
+			t.Setenv("NODERUN_SPEC_FN_ENV", "fn-seekrit")
 			wf := &Workflow{
 				ID: "spec-fn-env",
 				Nodes: []Node{
 					{ID: "inj", Type: "inject", Data: map[string]interface{}{}},
 					{ID: "fn", Type: "function", Data: map[string]interface{}{
-						"func": "msg.payload = env.get('GOFLOW_SPEC_FN_ENV'); return msg;",
+						"func": "msg.payload = env.get('NODERUN_SPEC_FN_ENV'); return msg;",
 					}},
 					specResponseNode("resp"),
 				},

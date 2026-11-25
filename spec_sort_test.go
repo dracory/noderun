@@ -12,7 +12,7 @@ import (
 // test/nodes/core/sequence/18-sort_spec.js (upstream describe
 // "SORT node"). Element sorts drive the executor directly; sequence
 // sorts deploy src → sort → debug and observe the re-emitted order in
-// the event log (GoFlow re-emits sorted messages asynchronously).
+// the event log (the engine re-emits sorted messages asynchronously).
 func TestSortSpec(t *testing.T) {
 	describe(t, "test/nodes/core/sequence/18-sort_spec.js", "SORT node", func(s *suite) {
 
@@ -257,16 +257,16 @@ func TestSortSpec(t *testing.T) {
 		})
 
 		s.it("should call done() when message is sent (payload)", func(t *testing.T) {
-			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no equivalent in this engine")
 		})
 		s.it("should call done() when message is sent (sequence)", func(t *testing.T) {
-			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no equivalent in this engine")
 		})
 		s.it("should call done() regardless of buffer overflow (same group)", func(t *testing.T) {
-			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no equivalent in this engine")
 		})
 		s.it("should call done() regardless of buffer overflow (different group)", func(t *testing.T) {
-			skipf(t, "Node-RED send/done messaging API has no GoFlow equivalent")
+			skipf(t, "Node-RED send/done messaging API has no equivalent in this engine")
 		})
 	})
 }

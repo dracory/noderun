@@ -155,7 +155,7 @@ func TestRBESpec(t *testing.T) {
 		s.it("should only send output if another chosen property changes - foo (rbe)", func(t *testing.T) {
 			// property "foo": messages lacking it are dropped without
 			// touching prev (upstream value===undefined gate). The
-			// GoFlow message model puts msg-level properties in the
+			// the engine's message model puts msg-level properties in the
 			// Data map, so {foo:...} arrives as Data{"foo":...}.
 			n := newNode(&RBEConfig{Func: "rbe", Property: "foo"})
 			foo := func(v interface{}) *Message {
@@ -254,7 +254,7 @@ func TestRBESpec(t *testing.T) {
 		})
 
 		s.it("should only send output if more than x away from original value (deadband)", func(t *testing.T) {
-			skipf(t, "upstream parseFloat parses \"6 deg\"→6; GoFlow reports non-numeric")
+			skipf(t, "upstream parseFloat parses \"6 deg\"→6; the engine reports non-numeric")
 		})
 
 		s.it("should accept a numeric gap (deadband)", func(t *testing.T) {
@@ -275,7 +275,7 @@ func TestRBESpec(t *testing.T) {
 		})
 
 		s.it("should warn if no number found in deadband mode", func(t *testing.T) {
-			// GoFlow surfaces the warning as a node error (catchable)
+			// the engine surfaces the warning as a node error (catchable)
 			// instead of a node.warn log line; the message is dropped
 			// either way — including the very first one.
 			n := newNode(&RBEConfig{Func: "deadband", Gap: "10"})
@@ -298,7 +298,7 @@ func TestRBESpec(t *testing.T) {
 		})
 
 		s.it("should not send output if more than x away from original value (narrowband)", func(t *testing.T) {
-			skipf(t, "upstream parseFloat parses \"6 deg\"→6; GoFlow reports non-numeric")
+			skipf(t, "upstream parseFloat parses \"6 deg\"→6; the engine reports non-numeric")
 		})
 
 		s.it("should send output if gap is 0 and input doesnt change (narrowband)", func(t *testing.T) {

@@ -226,7 +226,7 @@ func TestDBBadDSNFailsDeploy(t *testing.T) {
 
 	// Unresolved env reference fails deploy too.
 	workflow2 := dbTestFlow("wf-db-env", map[string]interface{}{
-		"dsn": "env:GOFLOW_TEST_UNSET_DB_DSN",
+		"dsn": "env:NODERUN_TEST_UNSET_DB_DSN",
 		"sql": "SELECT 1",
 	})
 	engine2 := NewEngine()

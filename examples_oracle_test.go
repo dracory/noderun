@@ -9,10 +9,10 @@ package noderunner_test
 // compares the debug events (node id + formatted message, as a
 // multiset) against the oracle.
 //
-// Opt-in: runs only when GOFLOW_EXAMPLES_ORACLE points at an
+// Opt-in: runs only when NODERUN_EXAMPLES_ORACLE points at an
 // oracle.json file; otherwise the suite skips. Example files resolve
 // via the same contract as TestNodeREDExampleFlows
-// (GOFLOW_EXAMPLES_DIR / testdata / GOFLOW_EXAMPLES_FETCH).
+// (NODERUN_EXAMPLES_DIR / testdata / NODERUN_EXAMPLES_FETCH).
 //
 // Honesty rule: every accepted difference is a NAMED entry in
 // oracleDifferences below, with a reason keyed per event
@@ -70,9 +70,9 @@ var oracleDifferences = []oracleDifference{
 }
 
 func TestNodeREDExampleOracle(t *testing.T) {
-	oraclePath := os.Getenv("GOFLOW_EXAMPLES_ORACLE")
+	oraclePath := os.Getenv("NODERUN_EXAMPLES_ORACLE")
 	if oraclePath == "" {
-		t.Skip("no oracle — set GOFLOW_EXAMPLES_ORACLE=/path/to/oracle.json (see docs/example-flows.md)")
+		t.Skip("no oracle — set NODERUN_EXAMPLES_ORACLE=/path/to/oracle.json (see docs/example-flows.md)")
 	}
 	data, err := os.ReadFile(oraclePath)
 	if err != nil {

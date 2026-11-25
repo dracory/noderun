@@ -12,7 +12,7 @@ import (
 )
 
 // This file implements the queue node's "dir" storage backend
-// (task 2026_11_23_folder_backends, decision 2026_11_23_folder_node):
+// (task folder_backends, decision folder_node):
 // a materialized queue where every staged item is ONE real file,
 // `{seq}-{msgid}.json`, so it can be browsed, edited and re-injected
 // with ordinary OS tools — debugging and dead-letter rework.
@@ -36,7 +36,7 @@ import (
 //   - Shared dirs are namespaced by ownership: a scoped store only
 //     claims files whose body nodeId equals its owner node ID, so two
 //     queue nodes on one directory cannot cross-delete or cross-reload
-//     each other's staged files (task 2026_11_23_queue_dir_shared).
+//     each other's staged files (task queue_dir_shared).
 //     Hand-written files must carry the queue's nodeId in the body to
 //     be adopted; unattributable files (empty nodeId) are skipped with
 //     a warning under a scoped store. A renamed node ID strands its
@@ -56,7 +56,7 @@ type dirQueueFile struct {
 // its own JSON file in one directory. It additionally implements
 // itemReloader so the queue re-reads the file at release time.
 //
-// Storage goes through the nodebase.Fs seam (task 2026_11_23_remote_fs): a
+// Storage goes through the nodebase.Fs seam (task remote_fs): a
 // local path uses the os adapter, an sftp:// or ftp:// locator uses the
 // remote adapter — the materialized "one file per item" debugging
 // workflow is unchanged, only the wire differs. All nodebase.Fs ops run under

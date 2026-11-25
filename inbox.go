@@ -7,7 +7,7 @@ import (
 )
 
 // This file implements per-node bounded inboxes at the send/traverse
-// boundary (decision 2026_11_23_bounded_inbox_durable_queue, Option A).
+// boundary (decision bounded_inbox_durable_queue, Option A).
 //
 // Each node may declare an inbox capacity and an overflow policy via
 // node.GetData():
@@ -15,7 +15,7 @@ import (
 //	"inboxCapacity": <number>   — max pending messages (<=0 or absent: unbounded)
 //	"inboxPolicy":   "block" | "drop-newest" | "drop-oldest" | "route-to-catch"
 //	"inboxDurable":  <bool>     — SUPERSEDED (durable-by-default since task
-//	                            2026_11_24_always_persisted_messages; every node
+//	                            always_persisted_messages; every node
 //	                            inbox persists when a DurableInboxStore is
 //                            configured). Parsed no longer; kept documented
 //                            so stale config is understood, not honored.

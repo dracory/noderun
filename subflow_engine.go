@@ -114,7 +114,7 @@ func ExpandSubflows(w nodestore.WorkflowInterface, allowOSEnv bool) error {
 
 // parseSubflowDef decodes a type:"subflow" node's Data into a
 // subflowDef. The definition payload uses the Node-RED field names:
-// name, in, out, env, meta, plus GoFlow's storage keys "nodes" and
+// name, in, out, env, meta, plus the engine's storage keys "nodes" and
 // "edges" for the internal graph. Internal nodes accept both the
 // backend shape ({id,type,position:{x,y},data:{...}}) and the
 // Node-RED flat shape ({id,type,x,y,...config}).
@@ -539,7 +539,7 @@ func inputPortIndex(targetKey string) int {
 // owns its config (and its _env overlay) independently.
 
 // NodeEnv resolves an env var for a node inside a running workflow
-// using the Node-RED scoping chain (task 2026_11_23_env_scoping):
+// using the Node-RED scoping chain (task env_scoping):
 //
 //	group env (view.groups[].env) → subflow overlay (node.GetData()["_env"])
 //	→ flow env (view.env) → global-config (engine.globalEnv)

@@ -318,7 +318,7 @@ func TestQueueDirUnknownBackend(t *testing.T) {
 // TestQueueDirSharedDirStoreIsolation covers the shared-dir hazard at
 // store level: two scoped stores on one directory assign colliding
 // seqs, yet neither can load, re-read or delete the other's files
-// (task 2026_11_23_queue_dir_shared).
+// (task queue_dir_shared).
 func TestQueueDirSharedDirStoreIsolation(t *testing.T) {
 	dir := t.TempDir()
 

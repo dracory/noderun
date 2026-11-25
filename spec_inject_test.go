@@ -10,7 +10,7 @@ import (
 // TestInjectSpec ports assertions from
 // test/nodes/core/common/20-inject_spec.js (upstream describe "inject
 // node" / "post"). Node-RED drives the inject via its admin HTTP API;
-// GoFlow's equivalents are FireInjectNode (the inject "button") and
+// the engine's equivalents are FireInjectNode (the inject "button") and
 // InjectMessage (posted message). A debug node observing the event log
 // plays the role of upstream's helper-node capture.
 func TestInjectSpec(t *testing.T) {
@@ -124,12 +124,12 @@ func TestInjectSpec(t *testing.T) {
 
 		// upstream title includes the trailing space — kept verbatim.
 		s.it("inject value of environment variable ", func(t *testing.T) {
-			t.Setenv("GOFLOW_SPEC_ENV", "seekrit")
+			t.Setenv("NODERUN_SPEC_ENV", "seekrit")
 			wf := &Workflow{
 				ID: "spec-inject-env",
 				Nodes: []Node{
 					{ID: "inj", Type: "inject", Data: map[string]interface{}{
-						"payload": "GOFLOW_SPEC_ENV", "payloadType": "env", "once": true,
+						"payload": "NODERUN_SPEC_ENV", "payloadType": "env", "once": true,
 					}},
 					specDebugNode("dbg"),
 				},

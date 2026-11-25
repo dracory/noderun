@@ -351,9 +351,9 @@ func TestFunctionNodeSandboxIsolation(t *testing.T) {
 
 	// env.get is the single deliberate host read (Node-RED parity for
 	// credentials — documented on FunctionNode). It must keep working.
-	t.Setenv("GOFLOW_SANDBOX_PROBE", "probe-ok")
+	t.Setenv("NODERUN_SANDBOX_PROBE", "probe-ok")
 	out, err = runFunctionScript(t,
-		"msg.payload = env.get('GOFLOW_SANDBOX_PROBE'); return msg;")
+		"msg.payload = env.get('NODERUN_SANDBOX_PROBE'); return msg;")
 	if err != nil {
 		t.Fatalf("env.get probe failed: %v", err)
 	}

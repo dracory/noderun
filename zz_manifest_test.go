@@ -8,13 +8,13 @@ import (
 )
 
 // TestSpecManifest dumps the registry of ported upstream titles to
-// the file named by GOFLOW_SPEC_MANIFEST. The coverage generator
+// the file named by NODERUN_SPEC_MANIFEST. The coverage generator
 // (cmd/speccoverage) sets that variable when it runs this suite.
 // File order puts this test last (zz_) so every it() has registered.
 func TestSpecManifest(t *testing.T) {
-	out := os.Getenv("GOFLOW_SPEC_MANIFEST")
+	out := os.Getenv("NODERUN_SPEC_MANIFEST")
 	if out == "" {
-		t.Skip("GOFLOW_SPEC_MANIFEST not set")
+		t.Skip("NODERUN_SPEC_MANIFEST not set")
 	}
 	registryMu.Lock()
 	defer registryMu.Unlock()

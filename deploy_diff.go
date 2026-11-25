@@ -8,7 +8,7 @@ import (
 
 // DeployMode selects how a deploy treats a workflow that is already
 // running (Node-RED's deploy modes: full / modified flows / modified
-// nodes — GoFlow offers full and partial).
+// nodes — this engine offers full and partial).
 type DeployMode int
 
 const (

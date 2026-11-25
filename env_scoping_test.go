@@ -12,10 +12,10 @@ import (
 // → flow env (view.env) → global-config → OS env. Each layer is
 // peeled away to prove the next one takes over.
 func TestEnvScopingChain(t *testing.T) {
-	t.Setenv("GOFLOW_ENV_SCOPED", "os")
+	t.Setenv("NODERUN_ENV_SCOPED", "os")
 
 	entry := func(v string) map[string]interface{} {
-		return map[string]interface{}{"name": "GOFLOW_ENV_SCOPED", "type": "str", "value": v}
+		return map[string]interface{}{"name": "NODERUN_ENV_SCOPED", "type": "str", "value": v}
 	}
 
 	workflow := &Workflow{
@@ -26,10 +26,10 @@ func TestEnvScopingChain(t *testing.T) {
 				ID:   "fn",
 				Type: "function",
 				Data: map[string]interface{}{
-					"func": `msg.payload = env.get("GOFLOW_ENV_SCOPED"); return msg;`,
+					"func": `msg.payload = env.get("NODERUN_ENV_SCOPED"); return msg;`,
 					// Subflow-style overlay: sits between group and
 					// flow in the chain.
-					subflowEnvKey: map[string]interface{}{"GOFLOW_ENV_SCOPED": "subflow"},
+					subflowEnvKey: map[string]interface{}{"NODERUN_ENV_SCOPED": "subflow"},
 				},
 			},
 		},
@@ -60,7 +60,7 @@ func TestEnvScopingChain(t *testing.T) {
 	})
 
 	// Group env wins over every other layer.
-	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "group" {
+	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "group" {
 		t.Fatalf("expected group env to win, got %#v (ok=%v)", v, ok)
 	}
 
@@ -71,7 +71,7 @@ func TestEnvScopingChain(t *testing.T) {
 	running := engine.flows[workflow.ID]
 	running.GetView()["groups"] = []interface{}{}
 	engine.runMu.Unlock()
-	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "subflow" {
+	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "subflow" {
 		t.Fatalf("expected subflow overlay to win, got %#v (ok=%v)", v, ok)
 	}
 
@@ -79,7 +79,7 @@ func TestEnvScopingChain(t *testing.T) {
 	engine.runMu.Lock()
 	delete(running.FindNodeByID("fn").GetData(), subflowEnvKey)
 	engine.runMu.Unlock()
-	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "flow" {
+	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "flow" {
 		t.Fatalf("expected flow env to win, got %#v (ok=%v)", v, ok)
 	}
 
@@ -87,14 +87,14 @@ func TestEnvScopingChain(t *testing.T) {
 	engine.runMu.Lock()
 	delete(running.GetView(), "env")
 	engine.runMu.Unlock()
-	if v, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); !ok || v != "global" {
+	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "global" {
 		t.Fatalf("expected global-config env to win, got %#v (ok=%v)", v, ok)
 	}
 
 	// Without global env the lookup misses — env.get falls back to
 	// os.Getenv (verified end-to-end below).
 	engine.SetGlobalEnv(nil)
-	if _, ok := engine.NodeEnv(workflow.ID, "fn", "GOFLOW_ENV_SCOPED"); ok {
+	if _, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); ok {
 		t.Fatal("expected all scoped layers to miss")
 	}
 }
@@ -103,7 +103,7 @@ func TestEnvScopingChain(t *testing.T) {
 // node end to end: a script reading env.get sees the group env value
 // through a deployed flow, and the OS env is the final fallback.
 func TestEnvScopingEnvGet(t *testing.T) {
-	t.Setenv("GOFLOW_ENV_E2E", "os-value")
+	t.Setenv("NODERUN_ENV_E2E", "os-value")
 
 	workflow := &Workflow{
 		ID:   "test-env-e2e",
@@ -114,7 +114,7 @@ func TestEnvScopingEnvGet(t *testing.T) {
 				ID:   "fn",
 				Type: "function",
 				Data: map[string]interface{}{
-					"func": `msg.payload = {scoped: env.get("GOFLOW_ENV_E2E"), os: env.get("GOFLOW_ENV_OS_ONLY")}; return msg;`,
+					"func": `msg.payload = {scoped: env.get("NODERUN_ENV_E2E"), os: env.get("NODERUN_ENV_OS_ONLY")}; return msg;`,
 				},
 			},
 			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"name": "out"}},
@@ -125,16 +125,16 @@ func TestEnvScopingEnvGet(t *testing.T) {
 		},
 		View: map[string]interface{}{
 			"env": []interface{}{
-				map[string]interface{}{"name": "GOFLOW_ENV_E2E", "type": "str", "value": "flow-value"},
+				map[string]interface{}{"name": "NODERUN_ENV_E2E", "type": "str", "value": "flow-value"},
 			},
 		},
 	}
-	t.Setenv("GOFLOW_ENV_OS_ONLY", "os-only")
+	t.Setenv("NODERUN_ENV_OS_ONLY", "os-only")
 
 	engine := NewEngine()
 	engine.AllowOSEnv = true // the OS env fallback is opt-in
 	engine.SetGlobalEnv([]interface{}{
-		map[string]interface{}{"name": "GOFLOW_ENV_E2E", "type": "str", "value": "global-value"},
+		map[string]interface{}{"name": "NODERUN_ENV_E2E", "type": "str", "value": "global-value"},
 	})
 	if _, err := engine.ExecuteWorkflow(context.Background(), workflow, nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)

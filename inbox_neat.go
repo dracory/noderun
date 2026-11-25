@@ -14,7 +14,7 @@ import (
 )
 
 // This file implements the production DurableInboxStore for the
-// nodestore-backed engine (task 2026_11_24_always_persisted_messages):
+// nodestore-backed engine (task always_persisted_messages):
 // every message handoff between nodes leaves a row in the shared
 // node_inbox_messages table BEFORE the downstream node may process it.
 // Multiple runners sharing one DSN (SQLite file, Postgres, MySQL) all

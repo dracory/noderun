@@ -32,20 +32,20 @@ module's engine.
 # from the noderun module root
 
 # fetch from GitHub + run (network — the only online mode)
-GOFLOW_EXAMPLES_FETCH=1 go test -run TestNodeREDExampleFlows -v .
+NODERUN_EXAMPLES_FETCH=1 go test -run TestNodeREDExampleFlows -v .
 
 # re-run against previously fetched files (offline)
 go test -run TestNodeREDExampleFlows -v .
 
 # run against any local directory of example .json files
-GOFLOW_EXAMPLES_DIR=/path/to/examples go test -run TestNodeREDExampleFlows -v .
+NODERUN_EXAMPLES_DIR=/path/to/examples go test -run TestNodeREDExampleFlows -v .
 ```
 
 ### Directory resolution order
 
-1. `GOFLOW_EXAMPLES_DIR` — a local path containing the `.json` files.
+1. `NODERUN_EXAMPLES_DIR` — a local path containing the `.json` files.
 2. `testdata/nodered-examples/` — files fetched by an earlier run.
-3. `GOFLOW_EXAMPLES_FETCH=1` — fetch from GitHub into `testdata/` and run.
+3. `NODERUN_EXAMPLES_FETCH=1` — fetch from GitHub into `testdata/` and run.
 4. Otherwise the suite **skips** with a named reason — plain
    `go test ./...` is hermetic and never touches the network.
 
@@ -75,7 +75,7 @@ Rules:
 ## The usage report
 
 Each run writes `nodered-examples-usage.json` **inside the examples
-dir** (so it lands wherever `GOFLOW_EXAMPLES_DIR` points; gitignored —
+dir** (so it lands wherever `NODERUN_EXAMPLES_DIR` points; gitignored —
 regenerated, not committed). Per file it records:
 
 - `types` — the node type ids the flow uses,
@@ -95,7 +95,7 @@ mean a real gap, not a harness bug.
 `TestNodeREDExampleOracle` (`examples_oracle_test.go`) replays the same
 corpus and diffs debug-node output against an `oracle.json` recorded
 from a real Node-RED instance. It is opt-in: it runs only when
-`GOFLOW_EXAMPLES_ORACLE` points at an oracle file. How that file is
+`NODERUN_EXAMPLES_ORACLE` points at an oracle file. How that file is
 produced is up to the consuming application — the suite only defines
 the comparison contract (`oracleDifferences`, same
 fail-on-newly-passing tightening rule).
@@ -104,5 +104,5 @@ fail-on-newly-passing tightening rule).
 
 1. Change `examplesTag` in `examples_test.go`.
 2. Delete `testdata/nodered-examples/` and re-run with
-   `GOFLOW_EXAMPLES_FETCH=1`.
+   `NODERUN_EXAMPLES_FETCH=1`.
 3. Re-run the expectations review — entries may need updating.

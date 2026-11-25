@@ -12,7 +12,7 @@ import (
 
 // TestTemplateSpec ports assertions from
 // test/nodes/core/function/80-template_spec.js (upstream describe
-// "template node"). GoFlow's template node renders Mustache against the
+// "template node"). the engine's template node renders Mustache against the
 // whole message (payload + metadata props) like Node-RED; flow/global/
 // env context tags are pre-resolved through the host context store and
 // env chain, matching upstream's NodeContext two-phase lookup.
@@ -292,7 +292,7 @@ func TestTemplateSpec(t *testing.T) {
 		})
 
 		s.it("should raise error if passed bad template", func(t *testing.T) {
-			// An unclosed tag is a parse error; GoFlow surfaces it as a
+			// An unclosed tag is a parse error; the engine surfaces it as a
 			// node error rather than a logged "Unclosed tag" event.
 			n := NewTemplateNode("n1", &TemplateConfig{
 				Field: "payload", Syntax: "mustache", Template: "payload={{payload",

@@ -9,8 +9,8 @@ import (
 )
 
 // This file implements the durable inbox backend (decision
-// 2026_11_23_bounded_inbox_durable_queue, extended by task
-// 2026_11_24_always_persisted_messages): a write-through persistence
+// bounded_inbox_durable_queue, extended by task
+// always_persisted_messages): a write-through persistence
 // layer behind InboxBackend so queued messages survive a process crash
 // or restart — "the queue is a place, not a pipe".
 //

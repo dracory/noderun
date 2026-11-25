@@ -12,7 +12,7 @@ import (
 )
 
 // This file implements the structural default error path — the Switch
-// "problem-jobs folder" model (task 2026_11_23_problem_messages).
+// "problem-jobs folder" model (task problem_messages).
 // Node-RED has no default error path: an error no catch node claims is
 // logged and the message evaporates. When the workflow designates a
 // problem queue (workflow.GetView()["onError"] = <queue node id>), an
@@ -85,7 +85,7 @@ func (e *WorkflowEngine) problemQueueID(workflowID string) (string, bool) {
 }
 
 // RouteFailure is the single failure-routing entry point. The
-// precedence ladder (task 2026_11_23_error_catch_port):
+// precedence ladder (task error_catch_port):
 //
 //  1. the node's own opt-in "error" output port, when errorCatch is
 //     enabled AND that port is wired (an enabled-but-unwired port

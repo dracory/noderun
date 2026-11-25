@@ -3,9 +3,6 @@
 The workflow engine for nodestore-based flows — deploys, runs, and
 stops workflows, entirely over `nodestore` interfaces.
 
-> Currently developed inside the goflow module as
-> `pkg/nodestore/noderunner`; this repository is the extraction target
-> once the package is fully working.
 
 ## Core types
 
