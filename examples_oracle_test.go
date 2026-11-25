@@ -119,13 +119,13 @@ var oracleDifferences = []oracleDifference{
 		Note: "written-file encoding/newline detail differs (msg text identical modulo invisible bytes)"},
 
 	// --- function node sandbox gap surfaced by error events ---
-	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:5:20",
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:5:20(38)",
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
-	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:8:20",
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:8:20(50)",
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
-	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:11:20",
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:11:20(58)",
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
-	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:14:20",
+	{File: "function/function/07 - Showing status information.json", Node: "a4a6c205.8afd4", Msg: "function script error: TypeError: Object has no member 'status' at function:14:20(64)",
 		Note: "goja sandbox lacks node.status — errors Node-RED never raised"},
 }
 
