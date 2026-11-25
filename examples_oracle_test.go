@@ -34,7 +34,8 @@ import (
 
 // oracleDebugEvent mirrors the recorder's debug event shape.
 type oracleDebugEvent struct {
-	Node   string `json:"node"`
+	Node   string `json:"node"` // upstream node id — informational; ids are re-minted on import
+	Name   string `json:"name"` // node display name — the stable comparison key
 	Format string `json:"format"`
 	Msg    string `json:"msg"`
 	Path   string `json:"path,omitempty"`
@@ -53,12 +54,12 @@ type oracleJSON struct {
 	Flows []oracleFlow `json:"flows"`
 }
 
-// oracleDifference accepts one event-level difference: file + node +
-// message must all match (exact strings). Note is required.
+// oracleDifference accepts one event-level difference: file + node
+// name + message must all match (exact strings). Note is required.
 type oracleDifference struct {
 	File string
-	Node string // empty = any node
-	Msg  string // empty = any message (with Node set, accepts all events of that node)
+	Name string // node display name; empty = any node
+	Msg  string // empty = any message (with Name set, accepts all events of that node)
 	Note string
 }
 
@@ -106,10 +107,10 @@ func TestNodeREDExampleOracle(t *testing.T) {
 			got := runOracleFlow(t, path, of)
 			missing, extra := diffOracle(t, of, got, accepted)
 			for _, m := range missing {
-				t.Errorf("missing debug event (real Node-RED emitted): node=%s msg=%s", m.Node, trunc(m.Msg, 120))
+				t.Errorf("missing debug event (real Node-RED emitted): name=%q node=%s msg=%s", m.Name, m.Node, trunc(m.Msg, 120))
 			}
 			for _, e := range extra {
-				t.Errorf("extra debug event (real Node-RED did not emit): node=%s msg=%s", e.Node, trunc(e.Msg, 120))
+				t.Errorf("extra debug event (real Node-RED did not emit): name=%q node=%s msg=%s", e.Name, e.Node, trunc(e.Msg, 120))
 			}
 			if len(missing)+len(extra) > 0 {
 				failures++
@@ -119,7 +120,7 @@ func TestNodeREDExampleOracle(t *testing.T) {
 	for i, d := range oracleDifferences {
 		if !accepted[i] {
 			t.Errorf("accepted difference never occurred — remove it: %s node=%s msg=%s (%s)",
-				d.File, d.Node, d.Msg, d.Note)
+				d.File, d.Name, d.Msg, d.Note)
 		}
 	}
 	t.Logf("%d/%d oracle flows matched", len(orc.Flows)-failures, len(orc.Flows))
@@ -181,15 +182,16 @@ func runOracleFlow(t *testing.T, path string, of oracleFlow) []oracleDebugEvent 
 	var got []oracleDebugEvent
 	for _, ev := range events {
 		if ev.Level == "debug" && ev.NodeID != "" {
-			got = append(got, oracleDebugEvent{Node: ev.NodeID, Msg: ev.Message})
+			got = append(got, oracleDebugEvent{Node: ev.NodeID, Name: ev.NodeName, Msg: ev.Message})
 		}
 	}
 	return got
 }
 
-// diffOracle compares want/got as multisets over (node, msg). Events
-// matching a named oracleDifferences entry are skipped (and the entry
-// is marked as used).
+// diffOracle compares want/got as multisets over (name, msg) — node
+// ids cannot be used because ImportNodeRED deliberately re-mints them
+// (untrusted document). Events matching a named oracleDifferences
+// entry are skipped (and the entry is marked as used).
 func diffOracle(t *testing.T, of oracleFlow, got []oracleDebugEvent, accepted map[int]bool) (missing, extra []oracleDebugEvent) {
 	t.Helper()
 
@@ -198,7 +200,7 @@ func diffOracle(t *testing.T, of oracleFlow, got []oracleDebugEvent, accepted ma
 			if d.File != of.File {
 				continue
 			}
-			if d.Node != "" && d.Node != ev.Node {
+			if d.Name != "" && d.Name != ev.Name {
 				continue
 			}
 			if d.Msg != "" && d.Msg != ev.Msg {
@@ -210,32 +212,32 @@ func diffOracle(t *testing.T, of oracleFlow, got []oracleDebugEvent, accepted ma
 		return false
 	}
 
-	type key struct{ node, msg string }
+	type key struct{ name, msg string }
 	want := map[key]int{}
 	for _, ev := range of.Debug {
 		if skip(ev) {
 			continue
 		}
-		want[key{ev.Node, ev.Msg}]++
+		want[key{ev.Name, ev.Msg}]++
 	}
 	gots := map[key]int{}
 	for _, ev := range got {
 		if skip(ev) {
 			continue
 		}
-		gots[key{ev.Node, ev.Msg}]++
+		gots[key{ev.Name, ev.Msg}]++
 	}
 	for k, n := range want {
 		if gots[k] < n {
 			for i := 0; i < n-gots[k]; i++ {
-				missing = append(missing, oracleDebugEvent{Node: k.node, Msg: k.msg})
+				missing = append(missing, oracleDebugEvent{Name: k.name, Msg: k.msg})
 			}
 		}
 	}
 	for k, n := range gots {
 		if want[k] < n {
 			for i := 0; i < n-want[k]; i++ {
-				extra = append(extra, oracleDebugEvent{Node: k.node, Msg: k.msg})
+				extra = append(extra, oracleDebugEvent{Name: k.name, Msg: k.msg})
 			}
 		}
 	}
