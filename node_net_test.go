@@ -3,8 +3,8 @@ package noderunner_test
 import (
 	"context"
 	"fmt"
-	"net"
 	. "github.com/dracory/noderun"
+	"net"
 	"strings"
 	"testing"
 	"time"

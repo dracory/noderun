@@ -211,7 +211,6 @@ var oracleFlowDifferences = map[string]string{
 	"function/function/10 - Asynchronous setup.json":           "function node async setup lifecycle not implemented",
 
 	// --- misc deploy gaps ---
-	"network/websocket/02 - Connect to websocket out server.json": "websocket-client/websocket-listener config node types not registered",
 
 	// --- live-network flows (real sockets/HTTP round-trips) ---
 	// http/tcp/udp flows drive real listeners and round-trips via the
@@ -647,6 +646,13 @@ func stageOracleFixtures(n map[string]interface{}, fixtureDir, httpBase string) 
 	case "http request":
 		if s, ok := n["url"].(string); ok {
 			n["url"] = moveURL(s)
+		}
+	case "websocket-client":
+		// The recorded ws:// URL targets Node-RED's :1880 listener —
+		// repoint it at the ephemeral shared listener (the
+		// websocket-listener endpoint mounts there too).
+		if s, ok := n["path"].(string); ok {
+			n["path"] = moveURL(s)
 		}
 	case "inject":
 		for _, p := range arrayOfMaps(n["props"]) {
