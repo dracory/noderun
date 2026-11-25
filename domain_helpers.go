@@ -29,11 +29,11 @@ func truthyFlag(v any) bool {
 	return false
 }
 
-func moduleLabel(w nodestore.WorkflowInterface, ref string) string {
+func flowLabel(w nodestore.WorkflowInterface, ref string) string {
 	if w == nil || w.GetView() == nil || ref == "" {
 		return ref
 	}
-	for _, m := range arrayOf(w.GetView()["modules"]) {
+	for _, m := range arrayOf(w.GetView()["childFlows"]) {
 		mm, ok := m.(map[string]any)
 		if !ok {
 			continue
@@ -47,12 +47,12 @@ func moduleLabel(w nodestore.WorkflowInterface, ref string) string {
 	return ref
 }
 
-func moduleRefMatches(w nodestore.WorkflowInterface, a, b any) bool {
+func flowRefMatches(w nodestore.WorkflowInterface, a, b any) bool {
 	ra, rb := nodebase.StringOf(a), nodebase.StringOf(b)
 	if ra == "" || rb == "" {
 		return false
 	}
-	return ra == rb || moduleLabel(w, ra) == moduleLabel(w, rb)
+	return ra == rb || flowLabel(w, ra) == flowLabel(w, rb)
 }
 
 func cloneDataMap(data map[string]any) map[string]any {
@@ -94,7 +94,7 @@ func outputPortIndex(sourceKey string) int {
 	return 0
 }
 
-func parseSubflowInnerNode(raw json.RawMessage) (nodestore.NodeInterface, error) {
+func parseComponentInnerNode(raw json.RawMessage) (nodestore.NodeInterface, error) {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
@@ -126,11 +126,11 @@ func parseSubflowInnerNode(raw json.RawMessage) (nodestore.NodeInterface, error)
 	return node, nil
 }
 
-const subflowDefNodeType = "subflow"
+const componentDefNodeType = "component"
 
-const subflowEnvKey = "_env"
+const componentEnvKey = "_env"
 
-const subflowTypePrefix = "subflow:"
+const componentTypePrefix = "component:"
 
 func floatOf(v any) float64 {
 	if f, ok := v.(float64); ok {

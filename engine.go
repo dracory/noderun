@@ -333,8 +333,8 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 	// which persists the deployed flag afterwards) never write the
 	// expanded graph back to storage.
 	expanded := cloneWorkflow(workflow)
-	if err := ExpandSubflows(expanded, e.AllowOSEnv); err != nil {
-		return "", nil, fmt.Errorf("subflow expansion: %w", err)
+	if err := ExpandComponents(expanded, e.AllowOSEnv); err != nil {
+		return "", nil, fmt.Errorf("component expansion: %w", err)
 	}
 	workflow = expanded
 
@@ -1428,8 +1428,8 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 // is disabled when its own "d"/"disabled" data flag is set (Node-RED
 // parity), when its module (data.module — an id under the id-keyed
 // model, a name in legacy documents) is listed in
-// workflow.GetView()["disabledModules"] or flagged enabled:false in
-// workflow.GetView()["modules"], or when a view group containing it
+// workflow.GetView()["disabledFlows"] or flagged enabled:false in
+// workflow.GetView()["childFlows"], or when a view group containing it
 // (workflow.GetView()["groups"] entry with disabled:true) is disabled.
 // Resolution is runtime-side: the flags live on the node/tab/group
 // model and the engine consults them at deploy and message time, so

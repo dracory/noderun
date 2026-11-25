@@ -18,19 +18,19 @@ import (
 func TestModuleLabel(t *testing.T) {
 	w := &Workflow{
 		View: map[string]interface{}{
-			"modules": []interface{}{
+			"childFlows": []interface{}{
 				map[string]interface{}{"id": "mod-1", "label": "Router"},
 			},
 		},
 	}
-	if got := moduleLabel(w, "mod-1"); got != "Router" {
-		t.Errorf("moduleLabel(id) = %q, want %q", got, "Router")
+	if got := flowLabel(w, "mod-1"); got != "Router" {
+		t.Errorf("flowLabel(id) = %q, want %q", got, "Router")
 	}
-	if got := moduleLabel(w, "Home"); got != "Home" {
-		t.Errorf("moduleLabel(legacy name) = %q, want %q", got, "Home")
+	if got := flowLabel(w, "Home"); got != "Home" {
+		t.Errorf("flowLabel(legacy name) = %q, want %q", got, "Home")
 	}
-	if got := moduleLabel(nil, "x"); got != "x" {
-		t.Errorf("moduleLabel(nil workflow) = %q, want %q", got, "x")
+	if got := flowLabel(nil, "x"); got != "x" {
+		t.Errorf("flowLabel(nil workflow) = %q, want %q", got, "x")
 	}
 }
 
@@ -39,21 +39,21 @@ func TestModuleLabel(t *testing.T) {
 func TestModuleRefMatches(t *testing.T) {
 	w := &Workflow{
 		View: map[string]interface{}{
-			"modules": []interface{}{
+			"childFlows": []interface{}{
 				map[string]interface{}{"id": "mod-1", "label": "Router"},
 			},
 		},
 	}
-	if !moduleRefMatches(w, "mod-1", "Router") {
+	if !flowRefMatches(w, "mod-1", "Router") {
 		t.Error("id should match its entity label")
 	}
-	if !moduleRefMatches(w, "Router", "mod-1") {
+	if !flowRefMatches(w, "Router", "mod-1") {
 		t.Error("label should match its entity id")
 	}
-	if moduleRefMatches(w, "mod-1", "Other") {
+	if flowRefMatches(w, "mod-1", "Other") {
 		t.Error("different modules should not match")
 	}
-	if moduleRefMatches(w, "", "Router") {
+	if flowRefMatches(w, "", "Router") {
 		t.Error("empty ref should not match")
 	}
 }
@@ -74,19 +74,19 @@ func TestDisabledModuleByID(t *testing.T) {
 						"payload":     "orig",
 						"payloadType": "str",
 						"once":        true,
-						"module":      "mod-1",
+						"childFlow":      "mod-1",
 					},
 				},
-				{ID: "dbg", Type: "debug", Data: map[string]interface{}{"module": "mod-1"}},
+				{ID: "dbg", Type: "debug", Data: map[string]interface{}{"childFlow": "mod-1"}},
 			},
 			Edges: []Edge{
 				{ID: "e1", Source: "inj", Target: "dbg"},
 			},
 			View: map[string]interface{}{
-				"modules": []interface{}{
+				"childFlows": []interface{}{
 					map[string]interface{}{"id": "mod-1", "label": "Tab2"},
 				},
-				"disabledModules": disabled,
+				"disabledFlows": disabled,
 			},
 		}
 	}
@@ -127,16 +127,16 @@ func TestDisabledModuleEnabledFlag(t *testing.T) {
 					"payload":     "orig",
 					"payloadType": "str",
 					"once":        true,
-					"module":      "mod-1",
+					"childFlow":      "mod-1",
 				},
 			},
-			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"module": "mod-1"}},
+			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"childFlow": "mod-1"}},
 		},
 		Edges: []Edge{
 			{ID: "e1", Source: "inj", Target: "dbg"},
 		},
 		View: map[string]interface{}{
-			"modules": []interface{}{
+			"childFlows": []interface{}{
 				map[string]interface{}{"id": "mod-1", "label": "Tab2", "enabled": false},
 			},
 		},
@@ -164,13 +164,13 @@ func TestExportNodeREDModuleID(t *testing.T) {
 		ID:   "wf-mod-id",
 		Name: "Module ID Export",
 		Nodes: []Node{
-			{ID: "n1", Type: "inject", Data: map[string]interface{}{"module": "mod-1"}},
+			{ID: "n1", Type: "inject", Data: map[string]interface{}{"childFlow": "mod-1"}},
 		},
 		View: map[string]interface{}{
-			"modules": []interface{}{
+			"childFlows": []interface{}{
 				map[string]interface{}{"id": "mod-1", "label": "Pages"},
 			},
-			"disabledModules": []interface{}{"mod-1"},
+			"disabledFlows": []interface{}{"mod-1"},
 		},
 	}
 	raw, err := nodestore.ExportNodeRED(w)

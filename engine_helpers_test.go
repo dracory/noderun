@@ -11,7 +11,7 @@ import (
 )
 
 // Test helpers ported from flowrunner's node_queue_test.go and
-// node_link_test.go (they are used by the ported engine/queue/subflow
+// node_link_test.go (they are used by the ported engine/queue/component
 // test files).
 
 // queueTestFlow builds inj -> queue -> dbg. The queue node carries

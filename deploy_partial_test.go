@@ -253,24 +253,24 @@ func TestPartialDeployIdenticalFlowIsNoop(t *testing.T) {
 	}
 }
 
-// TestPartialDeploySubflowReExpansion verifies the diff runs on the
-// subflowDefNodeShim adapts subflowDefNode (subflow_test.go) to the
+// TestPartialDeployComponentReExpansion verifies the diff runs on the
+// componentDefNodeShim adapts componentDefNode (component_test.go) to the
 // shim Node type used by this file's Workflow literals.
-func subflowDefNodeShim(id, name string, in, out []interface{}, env []interface{}, nodes, edges []interface{}) Node {
-	return Node{ID: id, Type: "subflow", Data: map[string]interface{}{
+func componentDefNodeShim(id, name string, in, out []interface{}, env []interface{}, nodes, edges []interface{}) Node {
+	return Node{ID: id, Type: "component", Data: map[string]interface{}{
 		"name": name, "in": in, "out": out, "env": env, "nodes": nodes, "edges": edges,
 	}}
 }
 
-// expanded graph: editing a subflow definition changes the namespaced
+// expanded graph: editing a component definition changes the namespaced
 // internal nodes, while an untouched inject trigger stays running.
-func TestPartialDeploySubflowReExpansion(t *testing.T) {
+func TestPartialDeployComponentReExpansion(t *testing.T) {
 	mkFlow := func(innerFunc string) *Workflow {
 		return &Workflow{
-			ID:   "test-partial-subflow",
-			Name: "Subflow Partial",
+			ID:   "test-partial-component",
+			Name: "Component Partial",
 			Nodes: []Node{
-				subflowDefNodeShim(
+				componentDefNodeShim(
 					"def1", "Wrap",
 					[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn"}}}},
 					[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn", "port": 0.0}}}},
@@ -285,7 +285,7 @@ func TestPartialDeploySubflowReExpansion(t *testing.T) {
 				{ID: "inj", Type: "inject", Data: map[string]interface{}{
 					"payload": "hi", "payloadType": "str",
 				}},
-				{ID: "inst", Type: "subflow:def1", Data: map[string]interface{}{}},
+				{ID: "inst", Type: "component:def1", Data: map[string]interface{}{}},
 				{ID: "dbg", Type: "debug", Data: map[string]interface{}{}},
 			},
 			Edges: []Edge{
@@ -307,7 +307,7 @@ func TestPartialDeploySubflowReExpansion(t *testing.T) {
 		t.Fatal("inject stopper not registered")
 	}
 
-	// Edit the subflow definition's internal node. The inject node is
+	// Edit the component definition's internal node. The inject node is
 	// unchanged and must keep running.
 	wf2 := mkFlow(`msg.payload = "inner"; return msg;`)
 	if _, err := engine.DeployWorkflowPartial(context.Background(), wf2, nil); err != nil {
@@ -315,7 +315,7 @@ func TestPartialDeploySubflowReExpansion(t *testing.T) {
 	}
 
 	if got := stopperFor(engine, wf.ID, "inj"); got != before {
-		t.Fatal("subflow def edit restarted an unrelated stopper")
+		t.Fatal("component def edit restarted an unrelated stopper")
 	}
 }
 

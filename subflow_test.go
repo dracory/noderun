@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-// subflowDefNode builds the type:"subflow" definition node as stored
+// componentDefNode builds the type:"component" definition node as stored
 // in a workflow: name, in/out ports, env defaults and the internal
 // nodes/edges all live in Data.
-func subflowDefNode(id, name string, in, out []interface{}, env []interface{}, nodes, edges []interface{}) nodestore.NodeInterface {
-	return nodestore.NewNode(id, "subflow").SetData(map[string]interface{}{
+func componentDefNode(id, name string, in, out []interface{}, env []interface{}, nodes, edges []interface{}) nodestore.NodeInterface {
+	return nodestore.NewNode(id, "component").SetData(map[string]interface{}{
 		"name":  name,
 		"in":    in,
 		"out":   out,
@@ -25,13 +25,13 @@ func subflowDefNode(id, name string, in, out []interface{}, env []interface{}, n
 	})
 }
 
-// TestSubflowEndToEnd deploys a flow whose subflow instance wraps an
+// TestComponentEndToEnd deploys a flow whose component instance wraps an
 // internal function node; the message must enter via the in port,
 // be transformed inside the namespaced copy, and leave via the out
 // port to the debug node.
-func TestSubflowEndToEnd(t *testing.T) {
-	workflow := nodestore.NewWorkflow("Subflow Flow").SetID("test-subflow-e2e").SetNodes([]nodestore.NodeInterface{
-		subflowDefNode(
+func TestComponentEndToEnd(t *testing.T) {
+	workflow := nodestore.NewWorkflow("Component Flow").SetID("test-component-e2e").SetNodes([]nodestore.NodeInterface{
+		componentDefNode(
 			"def1", "Wrap",
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn"}}}},
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn", "port": 0.0}}}},
@@ -48,7 +48,7 @@ func TestSubflowEndToEnd(t *testing.T) {
 			"payloadType": "str",
 			"once":        true,
 		}),
-		nodestore.NewNode("inst", "subflow:def1").SetData(map[string]interface{}{"name": "Wrap 1"}),
+		nodestore.NewNode("inst", "component:def1").SetData(map[string]interface{}{"name": "Wrap 1"}),
 		nodestore.NewNode("dbg", "debug").SetData(map[string]interface{}{"name": "out"}),
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inj", "inst"),
@@ -72,10 +72,10 @@ func TestSubflowEndToEnd(t *testing.T) {
 		t.Fatalf("expanded internal node inst/fn not found in running workflow")
 	}
 	if _, ok := engine.LookupNode(workflow.GetID(), "inst"); ok {
-		t.Fatalf("subflow instance node should not survive expansion")
+		t.Fatalf("component instance node should not survive expansion")
 	}
 	if _, ok := engine.LookupNode(workflow.GetID(), "def1"); ok {
-		t.Fatalf("subflow definition node should not be part of the running graph")
+		t.Fatalf("component definition node should not be part of the running graph")
 	}
 
 	var sawPayload bool
@@ -93,12 +93,12 @@ func TestSubflowEndToEnd(t *testing.T) {
 	}
 }
 
-// TestSubflowInstancesIsolated deploys two instances of the same
-// subflow: each internal copy keeps its own node context, so the
+// TestComponentInstancesIsolated deploys two instances of the same
+// component: each internal copy keeps its own node context, so the
 // per-instance counter returns 1 on both, not 2 on the second.
-func TestSubflowInstancesIsolated(t *testing.T) {
-	workflow := nodestore.NewWorkflow("Isolation Flow").SetID("test-subflow-isolation").SetNodes([]nodestore.NodeInterface{
-		subflowDefNode(
+func TestComponentInstancesIsolated(t *testing.T) {
+	workflow := nodestore.NewWorkflow("Isolation Flow").SetID("test-component-isolation").SetNodes([]nodestore.NodeInterface{
+		componentDefNode(
 			"def2", "Counter",
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn"}}}},
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn", "port": 0.0}}}},
@@ -112,8 +112,8 @@ func TestSubflowInstancesIsolated(t *testing.T) {
 		),
 		nodestore.NewNode("inj1", "inject").SetData(map[string]interface{}{"payload": "a", "payloadType": "str", "once": true}),
 		nodestore.NewNode("inj2", "inject").SetData(map[string]interface{}{"payload": "b", "payloadType": "str", "once": true}),
-		nodestore.NewNode("instA", "subflow:def2").SetData(map[string]interface{}{}),
-		nodestore.NewNode("instB", "subflow:def2").SetData(map[string]interface{}{}),
+		nodestore.NewNode("instA", "component:def2").SetData(map[string]interface{}{}),
+		nodestore.NewNode("instB", "component:def2").SetData(map[string]interface{}{}),
 		nodestore.NewNode("dbgA", "debug").SetData(map[string]interface{}{"name": "A"}),
 		nodestore.NewNode("dbgB", "debug").SetData(map[string]interface{}{"name": "B"}),
 	}).SetEdges([]nodestore.EdgeInterface{
@@ -157,12 +157,12 @@ func TestSubflowInstancesIsolated(t *testing.T) {
 	}
 }
 
-// TestSubflowEnvOverride verifies per-instance env overrides reach
-// env.get inside the subflow, falling back to the definition default
+// TestComponentEnvOverride verifies per-instance env overrides reach
+// env.get inside the component, falling back to the definition default
 // when the instance does not override.
-func TestSubflowEnvOverride(t *testing.T) {
-	workflow := nodestore.NewWorkflow("Env Flow").SetID("test-subflow-env").SetNodes([]nodestore.NodeInterface{
-		subflowDefNode(
+func TestComponentEnvOverride(t *testing.T) {
+	workflow := nodestore.NewWorkflow("Env Flow").SetID("test-component-env").SetNodes([]nodestore.NodeInterface{
+		componentDefNode(
 			"def3", "Greeter",
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn"}}}},
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn", "port": 0.0}}}},
@@ -176,10 +176,10 @@ func TestSubflowEnvOverride(t *testing.T) {
 		),
 		nodestore.NewNode("inj1", "inject").SetData(map[string]interface{}{"payload": "a", "payloadType": "str", "once": true}),
 		nodestore.NewNode("inj2", "inject").SetData(map[string]interface{}{"payload": "b", "payloadType": "str", "once": true}),
-		nodestore.NewNode("instA", "subflow:def3").SetData(map[string]interface{}{
+		nodestore.NewNode("instA", "component:def3").SetData(map[string]interface{}{
 			"env": []interface{}{map[string]interface{}{"name": "GREETING", "type": "str", "value": "hi"}},
 		}),
-		nodestore.NewNode("instB", "subflow:def3").SetData(map[string]interface{}{}),
+		nodestore.NewNode("instB", "component:def3").SetData(map[string]interface{}{}),
 		nodestore.NewNode("dbgA", "debug").SetData(map[string]interface{}{"name": "A"}),
 		nodestore.NewNode("dbgB", "debug").SetData(map[string]interface{}{"name": "B"}),
 	}).SetEdges([]nodestore.EdgeInterface{
@@ -216,8 +216,8 @@ func TestSubflowEnvOverride(t *testing.T) {
 	}
 }
 
-// TestNodeREDImportRuns proves a Node-RED flow export — tab, subflow
-// definition with internal nodes at z=<defId>, and a subflow:<id>
+// TestNodeREDImportRuns proves a Node-RED flow export — tab, component
+// definition with internal nodes at z=<defId>, and a component:<id>
 // instance — imports and deploys unmodified.
 func TestNodeREDImportRuns(t *testing.T) {
 	flowJSON := `[
@@ -230,7 +230,7 @@ func TestNodeREDImportRuns(t *testing.T) {
 		 "func":"msg.payload = env.get('GREETING') + ':' + msg.payload; return msg;","outputs":1,"wires":[[]]},
 		{"id":"nrInj","type":"inject","z":"tab1","x":100,"y":100,
 		 "payload":"hi","payloadType":"str","once":true,"wires":[["nrInst"]]},
-		{"id":"nrInst","type":"subflow:defX","z":"tab1","x":250,"y":100,"name":"Wrap 1","wires":[["nrDbg"]]},
+		{"id":"nrInst","type":"component:defX","z":"tab1","x":250,"y":100,"name":"Wrap 1","wires":[["nrDbg"]]},
 		{"id":"nrDbg","type":"debug","z":"tab1","x":400,"y":100,"active":true,"wires":[[]]}
 	]`
 
@@ -239,26 +239,26 @@ func TestNodeREDImportRuns(t *testing.T) {
 		t.Fatalf("import failed: %v", err)
 	}
 
-	// The subflow definition must be folded into a type:"subflow"
+	// The component definition must be folded into a type:"component"
 	// node with its internal node carried in Data.
 	// Import re-mints source ids — locate by type: the def folds
-	// into a "subflow" node, the instance into "subflow:<newDefID>".
+	// into a "component" node, the instance into "component:<newDefID>".
 	var def, inst nodestore.NodeInterface
 	for i := range workflow.GetNodes() {
 		switch {
-		case workflow.GetNodes()[i].GetType() == "subflow":
+		case workflow.GetNodes()[i].GetType() == "component":
 			def = workflow.GetNodes()[i]
-		case strings.HasPrefix(workflow.GetNodes()[i].GetType(), "subflow:"):
+		case strings.HasPrefix(workflow.GetNodes()[i].GetType(), "component:"):
 			inst = workflow.GetNodes()[i]
 		}
 	}
 	if def == nil {
-		t.Fatalf("subflow definition not imported; nodes=%+v", workflow.GetNodes())
+		t.Fatalf("component definition not imported; nodes=%+v", workflow.GetNodes())
 	}
 	if inst == nil {
-		t.Fatalf("subflow instance not imported; nodes=%+v", workflow.GetNodes())
+		t.Fatalf("component instance not imported; nodes=%+v", workflow.GetNodes())
 	}
-	if inst.GetType() != "subflow:"+def.GetID() {
+	if inst.GetType() != "component:"+def.GetID() {
 		t.Fatalf("instance type %q does not reference def %q", inst.GetType(), def.GetID())
 	}
 	inner, _ := def.GetData()["nodes"].([]interface{})
@@ -277,12 +277,12 @@ func TestNodeREDImportRuns(t *testing.T) {
 	}
 	var reDef nodestore.NodeInterface
 	for i := range reimported.GetNodes() {
-		if reimported.GetNodes()[i].GetType() == "subflow" {
+		if reimported.GetNodes()[i].GetType() == "component" {
 			reDef = reimported.GetNodes()[i]
 		}
 	}
 	if reDef == nil {
-		t.Fatalf("exported flow lost the subflow definition: %s", raw)
+		t.Fatalf("exported flow lost the component definition: %s", raw)
 	}
 	inner, _ = reDef.GetData()["nodes"].([]interface{})
 	if len(inner) != 1 {
@@ -313,37 +313,37 @@ func TestNodeREDImportRuns(t *testing.T) {
 		}
 	}
 	if !sawPayload {
-		t.Fatalf("subflow env + in/out wiring failed; events=%v", events)
+		t.Fatalf("component env + in/out wiring failed; events=%v", events)
 	}
 }
 
-// TestSubflowRecursiveRejected documents the v1 boundary: a subflow
+// TestComponentRecursiveRejected documents the v1 boundary: a component
 // that contains an instance of itself fails deploy with a clear error
 // instead of expanding forever. Non-recursive nesting works.
-func TestSubflowRecursiveRejected(t *testing.T) {
-	selfRef := subflowDefNode(
+func TestComponentRecursiveRejected(t *testing.T) {
+	selfRef := componentDefNode(
 		"loop", "Loop",
 		nil, nil, nil,
 		[]interface{}{map[string]interface{}{
 			"id":   "innerInst",
-			"type": "subflow:loop",
+			"type": "component:loop",
 			"data": map[string]interface{}{},
 		}},
 		nil,
 	)
-	workflow := nodestore.NewWorkflow("Recursive Flow").SetID("test-subflow-recursion").SetNodes([]nodestore.NodeInterface{selfRef, nodestore.NewNode("inst", "subflow:loop").SetData(map[string]interface{}{})})
+	workflow := nodestore.NewWorkflow("Recursive Flow").SetID("test-component-recursion").SetNodes([]nodestore.NodeInterface{selfRef, nodestore.NewNode("inst", "component:loop").SetData(map[string]interface{}{})})
 
 	engine := NewEngine()
 	if _, err := engine.ExecuteWorkflow(context.Background(), workflow, nil); err == nil {
-		t.Fatalf("recursive subflow deployed; want a clear error")
+		t.Fatalf("recursive component deployed; want a clear error")
 	} else if !strings.Contains(err.Error(), "recursive") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Non-recursive nesting: outer def contains an instance of the
 	// inner def — must expand and run.
-	nested := nodestore.NewWorkflow("Nested Flow").SetID("test-subflow-nested").SetNodes([]nodestore.NodeInterface{
-		subflowDefNode(
+	nested := nodestore.NewWorkflow("Nested Flow").SetID("test-component-nested").SetNodes([]nodestore.NodeInterface{
+		componentDefNode(
 			"inner", "Inner",
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "j"}}}},
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "j", "port": 0.0}}}},
@@ -351,47 +351,47 @@ func TestSubflowRecursiveRejected(t *testing.T) {
 			[]interface{}{map[string]interface{}{"id": "j", "type": "junction", "data": map[string]interface{}{}}},
 			nil,
 		),
-		subflowDefNode(
+		componentDefNode(
 			"outer", "Outer",
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "innerInst"}}}},
 			[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "innerInst", "port": 0.0}}}},
 			nil,
 			[]interface{}{map[string]interface{}{
 				"id":   "innerInst",
-				"type": "subflow:inner",
+				"type": "component:inner",
 				"data": map[string]interface{}{},
 			}},
 			nil,
 		),
 		nodestore.NewNode("inj", "inject").SetData(map[string]interface{}{"payload": "x", "payloadType": "str", "once": true}),
-		nodestore.NewNode("inst", "subflow:outer").SetData(map[string]interface{}{}),
+		nodestore.NewNode("inst", "component:outer").SetData(map[string]interface{}{}),
 		nodestore.NewNode("dbg", "debug").SetData(map[string]interface{}{"name": "out"}),
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inj", "inst"),
 		nodestore.NewEdge("e2", "inst", "dbg"),
 	})
 	if _, err := engine.ExecuteWorkflow(context.Background(), nested, nil); err != nil {
-		t.Fatalf("nested subflow deploy failed: %v", err)
+		t.Fatalf("nested component deploy failed: %v", err)
 	}
 	defer func() { _ = engine.StopWorkflow(nested.GetID()) }()
 
 	nodes, events := waitForStatus(engine, nested.GetID(), "dbg", "ok", 3*time.Second)
 	if nodes["dbg"] != "ok" {
-		t.Fatalf("nested subflow did not complete; statuses=%v events=%v", nodes, events)
+		t.Fatalf("nested component did not complete; statuses=%v events=%v", nodes, events)
 	}
 	if _, ok := engine.LookupNode(nested.GetID(), "inst/innerInst/j"); !ok {
 		t.Fatalf("nested internal node inst/innerInst/j not found")
 	}
 }
 
-// TestSubflowOrphanedInstanceFailsDeploy: a subflow:<id> instance
+// TestComponentOrphanedInstanceFailsDeploy: a component:<id> instance
 // whose definition is absent must fail deploy with the clear
 // "definition not found" error — even when the workflow carries no
-// subflow definitions at all (previously ExpandSubflows early-
+// component definitions at all (previously ExpandComponents early-
 // returned and the instance died later as an unknown node type).
-func TestSubflowOrphanedInstanceFailsDeploy(t *testing.T) {
-	workflow := nodestore.NewWorkflow("Orphan Flow").SetID("test-subflow-orphan").SetNodes([]nodestore.NodeInterface{
-		nodestore.NewNode("inst", "subflow:missing").SetData(map[string]interface{}{}),
+func TestComponentOrphanedInstanceFailsDeploy(t *testing.T) {
+	workflow := nodestore.NewWorkflow("Orphan Flow").SetID("test-component-orphan").SetNodes([]nodestore.NodeInterface{
+		nodestore.NewNode("inst", "component:missing").SetData(map[string]interface{}{}),
 		nodestore.NewNode("dbg", "debug").SetData(map[string]interface{}{}),
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inst", "dbg"),
@@ -399,32 +399,32 @@ func TestSubflowOrphanedInstanceFailsDeploy(t *testing.T) {
 
 	engine := NewEngine()
 	if _, err := engine.ExecuteWorkflow(context.Background(), workflow, nil); err == nil {
-		t.Fatalf("orphaned subflow instance deployed; want a definition-not-found error")
+		t.Fatalf("orphaned component instance deployed; want a definition-not-found error")
 	} else if !strings.Contains(err.Error(), `definition "missing" not found`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-// TestExpandSubflowsErrorLeavesWorkflowUnchanged: a failed expansion
+// TestExpandComponentsErrorLeavesWorkflowUnchanged: a failed expansion
 // must not partially mutate the input workflow — definition nodes
 // stay in place and nodes/edges are untouched.
-func TestExpandSubflowsErrorLeavesWorkflowUnchanged(t *testing.T) {
+func TestExpandComponentsErrorLeavesWorkflowUnchanged(t *testing.T) {
 	nodes := []nodestore.NodeInterface{
-		subflowDefNode(
+		componentDefNode(
 			"d1", "D",
 			nil, nil, nil,
 			[]interface{}{map[string]interface{}{"id": "j", "type": "junction", "data": map[string]interface{}{}}},
 			nil,
 		),
-		nodestore.NewNode("orphan", "subflow:nope").SetData(map[string]interface{}{}),
+		nodestore.NewNode("orphan", "component:nope").SetData(map[string]interface{}{}),
 		nodestore.NewNode("x", "junction").SetData(map[string]interface{}{}),
 	}
 	edges := []nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "orphan", "x"),
 	}
-	w := nodestore.NewWorkflow("").SetID("test-subflow-no-mutation").SetNodes(append([]nodestore.NodeInterface(nil), nodes...)).SetEdges(append([]nodestore.EdgeInterface(nil), edges...))
+	w := nodestore.NewWorkflow("").SetID("test-component-no-mutation").SetNodes(append([]nodestore.NodeInterface(nil), nodes...)).SetEdges(append([]nodestore.EdgeInterface(nil), edges...))
 
-	if err := ExpandSubflows(w, false); err == nil {
+	if err := ExpandComponents(w, false); err == nil {
 		t.Fatalf("expansion of unknown definition succeeded; want error")
 	} else if !strings.Contains(err.Error(), `definition "nope" not found`) {
 		t.Fatalf("unexpected error: %v", err)
@@ -437,14 +437,14 @@ func TestExpandSubflowsErrorLeavesWorkflowUnchanged(t *testing.T) {
 	}
 }
 
-// TestExpandSubflowsDanglingEdgesFail: edges left pointing at removed
+// TestExpandComponentsDanglingEdgesFail: edges left pointing at removed
 // definition nodes, and definition-internal edges with unknown
 // endpoints, must fail expansion instead of silently passing through
 // or being dropped.
-func TestExpandSubflowsDanglingEdgesFail(t *testing.T) {
+func TestExpandComponentsDanglingEdgesFail(t *testing.T) {
 	// nodestore.EdgeInterface from a regular node into a definition node.
-	w := nodestore.NewWorkflow("").SetID("test-subflow-def-edge").SetNodes([]nodestore.NodeInterface{
-		subflowDefNode(
+	w := nodestore.NewWorkflow("").SetID("test-component-def-edge").SetNodes([]nodestore.NodeInterface{
+		componentDefNode(
 			"d2", "D",
 			nil, nil, nil,
 			[]interface{}{map[string]interface{}{"id": "j", "type": "junction", "data": map[string]interface{}{}}},
@@ -454,15 +454,15 @@ func TestExpandSubflowsDanglingEdgesFail(t *testing.T) {
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inj", "d2"),
 	})
-	if err := ExpandSubflows(w, false); err == nil {
-		t.Fatalf("edge into a subflow definition expanded cleanly; want error")
-	} else if !strings.Contains(err.Error(), "subflow definition") {
+	if err := ExpandComponents(w, false); err == nil {
+		t.Fatalf("edge into a component definition expanded cleanly; want error")
+	} else if !strings.Contains(err.Error(), "component definition") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Internal definition edge with an unknown endpoint.
-	w2 := nodestore.NewWorkflow("").SetID("test-subflow-inner-edge").SetNodes([]nodestore.NodeInterface{
-		subflowDefNode(
+	w2 := nodestore.NewWorkflow("").SetID("test-component-inner-edge").SetNodes([]nodestore.NodeInterface{
+		componentDefNode(
 			"d3", "D",
 			nil, nil, nil,
 			[]interface{}{map[string]interface{}{"id": "j", "type": "junction", "data": map[string]interface{}{}}},
@@ -470,9 +470,9 @@ func TestExpandSubflowsDanglingEdgesFail(t *testing.T) {
 				"id": "ie1", "source": "j", "sourceKey": "output_1", "target": "ghost",
 			}},
 		),
-		nodestore.NewNode("inst", "subflow:d3").SetData(map[string]interface{}{}),
+		nodestore.NewNode("inst", "component:d3").SetData(map[string]interface{}{}),
 	})
-	if err := ExpandSubflows(w2, false); err == nil {
+	if err := ExpandComponents(w2, false); err == nil {
 		t.Fatalf("internal edge to unknown node expanded cleanly; want error")
 	} else if !strings.Contains(err.Error(), "unknown node") {
 		t.Fatalf("unexpected error: %v", err)

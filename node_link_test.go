@@ -132,7 +132,7 @@ func TestLinkCall(t *testing.T) {
 		t.Fatalf("log2 never reached ok; statuses=%v events=%v", nodes, events)
 	}
 	if nodes["chg"] != "ok" || nodes["ret"] != "ok" {
-		t.Fatalf("subflow nodes did not complete; statuses=%v", nodes)
+		t.Fatalf("component nodes did not complete; statuses=%v", nodes)
 	}
 	for _, ev := range events {
 		if ev.Level == "error" {

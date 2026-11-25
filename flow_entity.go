@@ -6,15 +6,15 @@ import (
 )
 
 // Module identity helpers (ported from flowrunner module.go).
-// moduleLabel and moduleRefMatches live in module_exchange.go.
+// flowLabel and flowRefMatches live in module_exchange.go.
 
-// moduleEntityDisabled reports whether the view.modules entity matching
+// flowEntityDisabled reports whether the view.modules entity matching
 // ref (by id or label) is flagged enabled:false.
-func moduleEntityDisabled(w nodestore.WorkflowInterface, ref string) bool {
+func flowEntityDisabled(w nodestore.WorkflowInterface, ref string) bool {
 	if w == nil || w.GetView() == nil || ref == "" {
 		return false
 	}
-	for _, m := range arrayOf(w.GetView()["modules"]) {
+	for _, m := range arrayOf(w.GetView()["childFlows"]) {
 		mm, ok := m.(map[string]interface{})
 		if !ok {
 			continue

@@ -171,16 +171,16 @@ func TestDisabledFlowTab(t *testing.T) {
 					"payload":     "orig",
 					"payloadType": "str",
 					"once":        true,
-					"module":      "Tab2",
+					"childFlow":      "Tab2",
 				},
 			},
-			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"module": "Tab2"}},
+			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"childFlow": "Tab2"}},
 		},
 		Edges: []Edge{
 			{ID: "e1", Source: "inj", Target: "dbg"},
 		},
 		View: map[string]interface{}{
-			"disabledModules": []interface{}{"Tab2"},
+			"disabledFlows": []interface{}{"Tab2"},
 		},
 	}
 

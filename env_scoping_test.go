@@ -8,7 +8,7 @@ import (
 )
 
 // TestEnvScopingChain verifies the Node-RED env.get resolution order:
-// group env (view.groups[].env) → subflow overlay (node.Data["_env"])
+// group env (view.groups[].env) → component overlay (node.Data["_env"])
 // → flow env (view.env) → global-config → OS env. Each layer is
 // peeled away to prove the next one takes over.
 func TestEnvScopingChain(t *testing.T) {
@@ -27,9 +27,9 @@ func TestEnvScopingChain(t *testing.T) {
 				Type: "function",
 				Data: map[string]interface{}{
 					"func": `msg.payload = env.get("NODERUN_ENV_SCOPED"); return msg;`,
-					// Subflow-style overlay: sits between group and
+					// Component-style overlay: sits between group and
 					// flow in the chain.
-					subflowEnvKey: map[string]interface{}{"NODERUN_ENV_SCOPED": "subflow"},
+					componentEnvKey: map[string]interface{}{"NODERUN_ENV_SCOPED": "component"},
 				},
 			},
 		},
@@ -38,7 +38,7 @@ func TestEnvScopingChain(t *testing.T) {
 			"groups": []interface{}{
 				map[string]interface{}{
 					"id":      "g1",
-					"module":  "Home",
+					"childFlow":  "Home",
 					"nodeIds": []interface{}{"fn"},
 					"env":     []interface{}{entry("group")},
 				},
@@ -71,13 +71,13 @@ func TestEnvScopingChain(t *testing.T) {
 	running := engine.flows[workflow.ID]
 	running.GetView()["groups"] = []interface{}{}
 	engine.runMu.Unlock()
-	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "subflow" {
-		t.Fatalf("expected subflow overlay to win, got %#v (ok=%v)", v, ok)
+	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "component" {
+		t.Fatalf("expected component overlay to win, got %#v (ok=%v)", v, ok)
 	}
 
 	// Without the overlay the flow env applies.
 	engine.runMu.Lock()
-	delete(running.FindNodeByID("fn").GetData(), subflowEnvKey)
+	delete(running.FindNodeByID("fn").GetData(), componentEnvKey)
 	engine.runMu.Unlock()
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "flow" {
 		t.Fatalf("expected flow env to win, got %#v (ok=%v)", v, ok)
@@ -153,14 +153,14 @@ func TestEnvScopingEnvGet(t *testing.T) {
 	}
 }
 
-// TestEnvScopingGroupSubflowInner verifies a grouped subflow instance's
+// TestEnvScopingGroupComponentInner verifies a grouped component instance's
 // env reaches its inner (namespaced) nodes.
-func TestEnvScopingGroupSubflowInner(t *testing.T) {
+func TestEnvScopingGroupComponentInner(t *testing.T) {
 	workflow := &Workflow{
-		ID:   "test-env-group-subflow",
-		Name: "Group Subflow Env",
+		ID:   "test-env-group-component",
+		Name: "Group Component Env",
 		Nodes: []Node{
-			subflowDefNodeShim(
+			componentDefNodeShim(
 				"defG", "Greeter",
 				[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn"}}}},
 				[]interface{}{map[string]interface{}{"wires": []interface{}{map[string]interface{}{"id": "fn", "port": 0.0}}}},
@@ -173,7 +173,7 @@ func TestEnvScopingGroupSubflowInner(t *testing.T) {
 				nil,
 			),
 			{ID: "inj", Type: "inject", Data: map[string]interface{}{"payload": "x", "payloadType": "str", "once": true}},
-			{ID: "inst", Type: "subflow:defG", Data: map[string]interface{}{}},
+			{ID: "inst", Type: "component:defG", Data: map[string]interface{}{}},
 			{ID: "dbg", Type: "debug", Data: map[string]interface{}{"name": "out"}},
 		},
 		Edges: []Edge{
@@ -184,7 +184,7 @@ func TestEnvScopingGroupSubflowInner(t *testing.T) {
 			"groups": []interface{}{
 				map[string]interface{}{
 					"id":      "g1",
-					"module":  "Home",
+					"childFlow":  "Home",
 					"nodeIds": []interface{}{"inst"},
 					"env": []interface{}{
 						map[string]interface{}{"name": "G_VAR", "type": "str", "value": "from-group"},
@@ -209,6 +209,6 @@ func TestEnvScopingGroupSubflowInner(t *testing.T) {
 		}
 	}
 	if !seen {
-		t.Fatalf("expected group env to reach inner subflow node; events=%v", events)
+		t.Fatalf("expected group env to reach inner component node; events=%v", events)
 	}
 }
