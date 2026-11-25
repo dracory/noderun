@@ -4,6 +4,8 @@ github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAw
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
 github.com/antlr4-go/antlr/v4 v4.13.1/go.mod h1:GKmUxMtwp6ZgGwZSva4eWPC5mS6vUAmOABFgjdkM7Nw=
+github.com/cbroglie/mustache v1.4.1 h1:n25LTo+hAYnUmFa2Quucou/JN/PJ+4hvI3aZHss/wLU=
+github.com/cbroglie/mustache v1.4.1/go.mod h1:Q5dS171cNzDjfoeB6S1/GBl8bUJgIa3t8i3eyL80vzc=
 github.com/coder/websocket v1.8.15 h1:6B2JPeOGlpff2Uz6vOEH1Vzpi0iUz20A+lPVhPHtNUA=
 github.com/coder/websocket v1.8.15/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=
 github.com/dlclark/regexp2/v2 v2.11.0 h1:z5uRPHav+eTVpoffDSuUP2KPS4f1ONZaPDK73S8HA0w=
@@ -16,8 +18,8 @@ github.com/dracory/entitystore v1.24.0 h1:9xMoBRwuPH8prrCTfoucMXB6dYxuO7AOn22rjh
 github.com/dracory/entitystore v1.24.0/go.mod h1:/gd1Ar4ofrqROk21vMvEuM0I3uJsoLi54PSKICyhXxc=
 github.com/dracory/neat v0.61.0 h1:r4y5OPcaJY+iMdlw57CFta6BHToEoMT1pet5T1ccA0E=
 github.com/dracory/neat v0.61.0/go.mod h1:UXvxqury++bQeOxCYrhn3aecITIrz5G+Q6H6s890mTk=
-github.com/dracory/nodebase v0.4.0 h1:SVMxd89mZ16aL2IZfhrAAU88mTT3E5mYZDBgHi2VxSc=
-github.com/dracory/nodebase v0.4.0/go.mod h1:+BP+TyiQUd3WqKigAXB3qE9ZhP8Ilbz5piGCecEF9zA=
+github.com/dracory/nodebase v0.5.0 h1:70uC9BNmlxldtWZ/TjlZ5C2lnz225Zbp2YtYP+oOU40=
+github.com/dracory/nodebase v0.5.0/go.mod h1:GnrGzGbpLJyYQtx5TTd1QrtLyaJvKG3wf17vXNc//Mk=
 github.com/dracory/nodestore v0.2.0 h1:Sc2198+3fh0tYkPPb4x3jdYuuF5+88F9IXDs8Tj+/+o=
 github.com/dracory/nodestore v0.2.0/go.mod h1:3yFuD+AmqbrrbaZmUuJhsLf7aG4Lpy3yOQqMA23zpvE=
 github.com/dracory/uid v1.14.0 h1:lou3jIYobFNiu/Xn1zyD6Hzelnkz9OuQ0mCg2E+dA4Q=

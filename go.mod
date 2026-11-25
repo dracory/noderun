@@ -6,7 +6,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/dracory/entitystore v1.24.0
 	github.com/dracory/neat v0.61.0
-	github.com/dracory/nodebase v0.4.0
+	github.com/dracory/nodebase v0.5.0
 	github.com/dracory/nodestore v0.2.0
 	github.com/eclipse/paho.mqtt.golang v1.5.2
 	github.com/emersion/go-imap v1.2.1
@@ -14,6 +14,7 @@ require (
 )
 
 require (
+	github.com/cbroglie/mustache v1.4.1 // indirect
 	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
 	github.com/dop251/goja v0.0.0-20261124141918-d9d211bc2d23 // indirect
 	github.com/dracory/dataobject v1.7.0 // indirect
