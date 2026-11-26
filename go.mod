@@ -7,7 +7,7 @@ require (
 	github.com/dracory/entitystore v1.24.0
 	github.com/dracory/neat v0.62.2
 	github.com/dracory/nodebase v0.7.0
-	github.com/dracory/nodestore v0.4.0
+	github.com/dracory/nodestore v0.5.0
 	github.com/eclipse/paho.mqtt.golang v1.5.2
 	github.com/emersion/go-imap v1.2.1
 	modernc.org/sqlite v1.63.0
