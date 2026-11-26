@@ -281,12 +281,16 @@ func (s *DirQueueStore) SaveInboxItem(item *DurableInboxItem) error {
 	if at.IsZero() {
 		at = time.Now()
 	}
+	wire, err := messageToWire(item.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to serialize queue message: %w", err)
+	}
 	f := dirQueueFile{
 		Seq:        s.nextSeq,
 		WorkflowID: item.WorkflowID,
 		NodeID:     item.NodeID,
 		MsgID:      nodebase.GenerateID(),
-		Payload:    messageToWire(item.Payload),
+		Payload:    wire,
 		EnqueuedAt: at,
 	}
 	if err := s.writeItem(f); err != nil {

@@ -1,6 +1,7 @@
 package noderunner_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -233,6 +234,60 @@ func TestQueueDirInspectOps(t *testing.T) {
 	}
 	if q.Count() != 0 || len(dirItemFiles(t, dir)) != 0 {
 		t.Fatalf("requeue must drain the file: count=%d files=%v", q.Count(), dirItemFiles(t, dir))
+	}
+}
+
+// TestQueueDirBinaryPayloadRoundTrip proves the file-backed queue uses
+// the same binary contract as the SQL inbox: bytes keep their type and
+// identity, while plain base64-looking strings remain strings.
+func TestQueueDirBinaryPayloadRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewDirQueueStore(dir)
+	if err != nil {
+		t.Fatalf("store create failed: %v", err)
+	}
+	original := []byte{0, 1, 2, 0xff}
+	if err := store.SaveInboxItem(&DurableInboxItem{
+		WorkflowID: "wf", NodeID: "n",
+		Payload: nodestore.NewMessage().SetPayload(original),
+	}); err != nil {
+		t.Fatalf("save binary failed: %v", err)
+	}
+	if err := store.SaveInboxItem(&DurableInboxItem{
+		WorkflowID: "wf", NodeID: "n",
+		Payload: nodestore.NewMessage().SetPayload("AAEC/w=="),
+	}); err != nil {
+		t.Fatalf("save string failed: %v", err)
+	}
+
+	rows, err := store.LoadInbox("wf")
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+	recovered, ok := rows[0].Payload.GetPayload().([]byte)
+	if !ok {
+		t.Fatalf("binary payload type = %T, want []byte", rows[0].Payload.GetPayload())
+	}
+	if !bytes.Equal(recovered, original) {
+		t.Fatalf("binary payload = %v, want %v", recovered, original)
+	}
+	if got := rows[1].Payload.GetPayload(); got != "AAEC/w==" {
+		t.Fatalf("plain string payload = %#v (%T), want unchanged string", got, got)
+	}
+
+	files := dirItemFiles(t, dir)
+	if len(files) != 2 {
+		t.Fatalf("expected 2 item files, got %v", files)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, files[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"$binary"`) {
+		t.Fatalf("binary item file does not use the explicit binary wire shape: %s", raw)
 	}
 }
 

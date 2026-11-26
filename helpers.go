@@ -2,6 +2,7 @@ package noderunner
 
 import (
 	"encoding/json"
+	"fmt"
 	nodestore "github.com/dracory/nodestore"
 	"time"
 )
@@ -75,33 +76,81 @@ func scrubNodeCredentials(node nodestore.NodeInterface) nodestore.NodeInterface 
 }
 
 // messageWire is the on-disk JSON shape of a message — identical to
-// the legacy flowrunner.Message encoding. Durable queue files cannot
-// marshal an interface field, so dirQueueFile stores this wire type
-// and converts at the boundary.
+// the legacy flowrunner.Message encoding, except payload/metadata use the
+// shared durable payload JSON codec so []byte values survive as bytes.
+// Durable queue files cannot marshal an interface field, so dirQueueFile
+// stores this wire type and converts at the boundary.
 type messageWire struct {
-	ID        string         `json:"id,omitempty"`
-	Payload   any            `json:"payload,omitempty"`
-	Metadata  map[string]any `json:"metadata,omitempty"`
-	Error     *string        `json:"error,omitempty"`
-	Timestamp time.Time      `json:"timestamp"`
+	ID        string          `json:"id,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	Error     *string         `json:"error,omitempty"`
+	Timestamp time.Time       `json:"timestamp"`
 	// LegacyData accepts the pre-Payload "data" key so queue files
 	// written before the Data→Payload rename still decode (read-side
 	// shim; writes always emit "payload").
 	LegacyData json.RawMessage `json:"data,omitempty"`
+
+	decodedPayload  any
+	decodedMetadata map[string]any
 }
 
 // messageToWire converts a message into its JSON wire form.
-func messageToWire(m nodestore.MessageInterface) *messageWire {
+func messageToWire(m nodestore.MessageInterface) (*messageWire, error) {
 	if m == nil {
-		return nil
+		return nil, nil
 	}
-	return &messageWire{
+	wire := &messageWire{
 		ID:        m.GetID(),
-		Payload:   m.GetPayload(),
-		Metadata:  m.GetMetadata(),
 		Error:     m.GetError(),
 		Timestamp: m.GetTimestamp(),
 	}
+	if m.GetPayload() != nil {
+		payload, err := nodestore.MarshalPayloadJSON(m.GetPayload())
+		if err != nil {
+			return nil, err
+		}
+		wire.Payload = json.RawMessage(payload)
+	}
+	if len(m.GetMetadata()) > 0 {
+		metadata, err := nodestore.MarshalPayloadJSON(m.GetMetadata())
+		if err != nil {
+			return nil, err
+		}
+		wire.Metadata = json.RawMessage(metadata)
+	}
+	return wire, nil
+}
+
+// UnmarshalJSON decodes the wire form, including the shared binary payload
+// contract, so a corrupt reserved binary object fails the queue-file read
+// instead of silently changing type.
+func (w *messageWire) UnmarshalJSON(raw []byte) error {
+	type wireAlias messageWire
+	var decoded wireAlias
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	*w = messageWire(decoded)
+	if len(w.Payload) > 0 {
+		payload, err := nodestore.UnmarshalPayloadJSON(w.Payload)
+		if err != nil {
+			return err
+		}
+		w.decodedPayload = payload
+	}
+	if len(w.Metadata) > 0 {
+		metadata, err := nodestore.UnmarshalPayloadJSON(w.Metadata)
+		if err != nil {
+			return err
+		}
+		metadataMap, ok := metadata.(map[string]any)
+		if !ok {
+			return fmt.Errorf("queue message metadata is not a JSON object")
+		}
+		w.decodedMetadata = metadataMap
+	}
+	return nil
 }
 
 // toMessage converts a decoded wire form back into a message,
@@ -112,8 +161,8 @@ func (w *messageWire) toMessage() nodestore.MessageInterface {
 		return m
 	}
 	m.SetID(w.ID)
-	m.SetPayload(w.Payload)
-	m.SetMetadata(w.Metadata)
+	m.SetPayload(w.decodedPayload)
+	m.SetMetadata(w.decodedMetadata)
 	if w.Error != nil {
 		m.SetError(*w.Error)
 	}

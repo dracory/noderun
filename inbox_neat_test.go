@@ -1,8 +1,11 @@
 package noderunner_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +13,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	_ "github.com/dracory/nodebase/builtin"
+	nodefile "github.com/dracory/nodebase/file"
+	"github.com/dracory/nodebase/filein"
 	. "github.com/dracory/noderun"
 	nodestore "github.com/dracory/nodestore"
 )
@@ -86,6 +91,86 @@ func TestNeatInboxStoreRoundtrip(t *testing.T) {
 	rows, _ = store.LoadInbox("wf")
 	if len(rows) != 2 || rows[0].Payload.GetPayload() != "two" {
 		t.Fatalf("delete ack left wrong rows: %+v", rows)
+	}
+}
+
+// TestBinaryPayloadDurableRoundTripFileOutput proves the contract end to
+// end at the durable-handoff boundary: a fileIn binary payload keeps its
+// bytes and []byte type through the SQL inbox, and file output writes those
+// original bytes rather than their base64 text representation.
+func TestBinaryPayloadDurableRoundTripFileOutput(t *testing.T) {
+	ctx := context.Background()
+	store := neatInboxTestStore(t)
+	dir := t.TempDir()
+	sourcePath := filepath.Join(dir, "input.bin")
+	targetPath := filepath.Join(dir, "output.bin")
+	original := []byte{0, 1, 2, 0xff, 'P', 'D', 'F'}
+	if err := os.WriteFile(sourcePath, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	producer := filein.NewFileInNode(
+		nodestore.NewNode("read", "fileIn"),
+		&filein.FileInConfig{Filename: sourcePath, Format: "binary"},
+		nil,
+	)
+	produced, err := producer.Execute(ctx, nodestore.NewMessage())
+	if err != nil {
+		t.Fatalf("fileIn execute: %v", err)
+	}
+	if payload, ok := produced.GetPayload().([]byte); !ok || !bytes.Equal(payload, original) {
+		t.Fatalf("fileIn produced %T %#v", produced.GetPayload(), produced.GetPayload())
+	}
+
+	// First cross the nodestore/entitystore boundary exactly as durable
+	// workflow state does.
+	entityStore := resumeTestStore(t)
+	if err := entityStore.MessageCreate(ctx, produced); err != nil {
+		t.Fatalf("entitystore message create: %v", err)
+	}
+	persisted, err := entityStore.MessageFindByID(ctx, produced.GetID())
+	if err != nil {
+		t.Fatalf("entitystore message find: %v", err)
+	}
+	if payload, ok := persisted.GetPayload().([]byte); !ok || !bytes.Equal(payload, original) {
+		t.Fatalf("entitystore recovered %T %#v", persisted.GetPayload(), persisted.GetPayload())
+	}
+
+	// Then cross the durable SQL inbox boundary with the entitystore-
+	// recovered message before the file output consumes it.
+	item := &DurableInboxItem{WorkflowID: "wf", NodeID: "write", Payload: persisted}
+	if err := store.SaveInboxItem(item); err != nil {
+		t.Fatalf("save inbox item: %v", err)
+	}
+	rows, err := store.LoadInbox("wf")
+	if err != nil {
+		t.Fatalf("load inbox: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	recovered, ok := rows[0].Payload.GetPayload().([]byte)
+	if !ok {
+		t.Fatalf("recovered payload is %T, want []byte", rows[0].Payload.GetPayload())
+	}
+	if !bytes.Equal(recovered, original) {
+		t.Fatalf("recovered bytes = %v, want %v", recovered, original)
+	}
+
+	writer := nodefile.NewFileNode(
+		nodestore.NewNode("write", "file"),
+		&nodefile.FileConfig{Filename: targetPath},
+		nil,
+	)
+	if _, err := writer.Execute(ctx, rows[0].Payload); err != nil {
+		t.Fatalf("file execute: %v", err)
+	}
+	written, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(written, original) {
+		t.Fatalf("written bytes = %v, want original %v (not base64 text)", written, original)
 	}
 }
 

@@ -74,21 +74,35 @@ func (neatInboxRow) TableName() string {
 
 // inboxPayload is the serialized form of a queued message envelope:
 // enough of nodestore.MessageInterface to rebuild it with lineage
-// (msgId, parentMsgId via Metadata) and error state intact.
+// (msgId, parentMsgId via Metadata) and error state intact. Payload and
+// metadata use the shared durable payload JSON codec so []byte values
+// keep their binary type across the database round-trip.
 type inboxPayload struct {
-	ID        string                 `json:"id,omitempty"`
-	Payload   any                    `json:"payload,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	Error     *string                `json:"error,omitempty"`
-	CreatedAt time.Time              `json:"created_at,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	Error     *string         `json:"error,omitempty"`
+	CreatedAt time.Time       `json:"created_at,omitempty"`
 }
 
 func marshalInboxPayload(msg nodestore.MessageInterface) (string, error) {
 	p := inboxPayload{}
 	if msg != nil {
 		p.ID = msg.GetID()
-		p.Payload = msg.GetPayload()
-		p.Metadata = msg.GetMetadata()
+		if msg.GetPayload() != nil {
+			payload, err := nodestore.MarshalPayloadJSON(msg.GetPayload())
+			if err != nil {
+				return "", err
+			}
+			p.Payload = json.RawMessage(payload)
+		}
+		if len(msg.GetMetadata()) > 0 {
+			metadata, err := nodestore.MarshalPayloadJSON(msg.GetMetadata())
+			if err != nil {
+				return "", err
+			}
+			p.Metadata = json.RawMessage(metadata)
+		}
 		p.Error = msg.GetError()
 		p.CreatedAt = msg.GetCreatedAt()
 	}
@@ -104,7 +118,27 @@ func unmarshalInboxPayload(raw string) (nodestore.MessageInterface, error) {
 	if err := json.Unmarshal([]byte(raw), &p); err != nil {
 		return nil, err
 	}
-	msg := nodestore.NewMessage().SetID(p.ID).SetPayload(p.Payload).SetMetadata(p.Metadata)
+	var payload any
+	if len(p.Payload) > 0 {
+		decoded, err := nodestore.UnmarshalPayloadJSON(p.Payload)
+		if err != nil {
+			return nil, err
+		}
+		payload = decoded
+	}
+	metadata := map[string]interface{}{}
+	if len(p.Metadata) > 0 {
+		decoded, err := nodestore.UnmarshalPayloadJSON(p.Metadata)
+		if err != nil {
+			return nil, err
+		}
+		metadataMap, ok := decoded.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("inbox metadata is not a JSON object")
+		}
+		metadata = metadataMap
+	}
+	msg := nodestore.NewMessage().SetID(p.ID).SetPayload(payload).SetMetadata(metadata)
 	if p.Error != nil {
 		msg.SetError(*p.Error)
 	}
