@@ -51,7 +51,7 @@ Dependency direction: `noderun → nodebase → nodestore`.
 - Inbox, durable queues, run journal (execution log)
 - Node-type registry (`RegisterNodeType`) and the `NodeHost`
   implementation backing executor runtime seams
-- Subflow/module composition, context and credential persistence
+- Component/child-flow composition, context and credential persistence
 - Filesystem abstractions (local/ftp/sftp) and inbound HTTP routing
 
 ## Rules

@@ -178,7 +178,7 @@ func expandComponentInstances(srcNodes []nodestore.NodeInterface, edges []nodest
 		// Still reject edges pointing at definition srcNodes — they are
 		// removed by the caller and would dangle silently.
 		for _, e := range edges {
-			if id, bad := edgeTouchesSubflowDef(e, defs); bad {
+			if id, bad := edgeTouchesComponentDef(e, defs); bad {
 				return nil, nil, nil, fmt.Errorf("edge %q references component definition %q, which is not a runnable node", e.GetID(), id)
 			}
 		}
@@ -223,7 +223,7 @@ func expandComponentInstances(srcNodes []nodestore.NodeInterface, edges []nodest
 		dstInst := instances[e.GetTarget()]
 		switch {
 		case srcInst == nil && dstInst == nil:
-			if id, bad := edgeTouchesSubflowDef(e, defs); bad {
+			if id, bad := edgeTouchesComponentDef(e, defs); bad {
 				return nil, nil, nil, fmt.Errorf("edge %q references component definition %q, which is not a runnable node", e.GetID(), id)
 			}
 			outEdges = append(outEdges, e)
@@ -265,10 +265,10 @@ func expandComponentInstances(srcNodes []nodestore.NodeInterface, edges []nodest
 	return outNodes, outEdges, instances, nil
 }
 
-// edgeTouchesSubflowDef reports whether e has an endpoint on a
+// edgeTouchesComponentDef reports whether e has an endpoint on a
 // definition node. Definitions are templates removed by expansion, so
 // such an edge would dangle in the deployed graph.
-func edgeTouchesSubflowDef(e nodestore.EdgeInterface, defs map[string]*componentDef) (string, bool) {
+func edgeTouchesComponentDef(e nodestore.EdgeInterface, defs map[string]*componentDef) (string, bool) {
 	if _, ok := defs[e.GetSource()]; ok {
 		return e.GetSource(), true
 	}
@@ -288,7 +288,7 @@ func (def *componentDef) expand(inst nodestore.NodeInterface, defs map[string]*c
 	if len(def.nodes) == 0 {
 		return nil, fmt.Errorf("component instance %q: definition %q has no internal nodes", inst.GetID(), def.id)
 	}
-	env := resolveSubflowEnv(def, inst, parentEnv, allowOSEnv)
+	env := resolveComponentEnv(def, inst, parentEnv, allowOSEnv)
 
 	idMap := make(map[string]string, len(def.nodes))
 	for _, inner := range def.nodes {
@@ -303,7 +303,7 @@ func (def *componentDef) expand(inst nodestore.NodeInterface, defs map[string]*c
 	for _, inner := range def.nodes {
 		data := cloneDataMap(inner.GetData())
 		data[componentEnvKey] = env
-		remapSubflowIDRefs(data, idMap)
+		remapComponentIDRefs(data, idMap)
 		innerNodes = append(innerNodes, nodestore.NewNode(idMap[inner.GetID()], inner.GetType()).SetPosition(inner.GetPositionX(), inner.GetPositionY()).SetData(data))
 	}
 	for _, e := range def.edges {
@@ -376,9 +376,9 @@ func (def *componentDef) expand(inst nodestore.NodeInterface, defs map[string]*c
 	return result, nil
 }
 
-// resolveSubflowEnv computes an instance's effective env: parent scope
+// resolveComponentEnv computes an instance's effective env: parent scope
 // (env inheritance) < definition defaults < instance overrides.
-func resolveSubflowEnv(def *componentDef, inst nodestore.NodeInterface, parent map[string]interface{}, allowOSEnv bool) map[string]interface{} {
+func resolveComponentEnv(def *componentDef, inst nodestore.NodeInterface, parent map[string]interface{}, allowOSEnv bool) map[string]interface{} {
 	env := make(map[string]interface{}, len(parent)+len(def.env))
 	for k, v := range parent {
 		env[k] = v
@@ -475,11 +475,11 @@ func componentEnvValue(v interface{}, typ string, allowOSEnv bool) interface{} {
 	return v
 }
 
-// remapSubflowIDRefs rewrites node references inside a copied node's
+// remapComponentIDRefs rewrites node references inside a copied node's
 // Data so ids pointing at internal nodes follow the instance
 // namespace: catch/status/complete "nodes" lists, linkOut "links" and
 // linkCall "link".
-func remapSubflowIDRefs(data map[string]interface{}, idMap map[string]string) {
+func remapComponentIDRefs(data map[string]interface{}, idMap map[string]string) {
 	for _, key := range []string{"links", "nodes"} {
 		raw, ok := data[key]
 		if !ok {

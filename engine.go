@@ -1426,7 +1426,7 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 
 // nodeDisabled reports whether a node is inert for this deploy. A node
 // is disabled when its own "d"/"disabled" data flag is set (Node-RED
-// parity), when its module (data.module — an id under the id-keyed
+// parity), when its child flow (data.childFlow — an id under the id-keyed
 // model, a name in legacy documents) is listed in
 // workflow.GetView()["disabledFlows"] or flagged enabled:false in
 // workflow.GetView()["childFlows"], or when a view group containing it

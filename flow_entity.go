@@ -5,10 +5,10 @@ import (
 	nodestore "github.com/dracory/nodestore"
 )
 
-// Module identity helpers (ported from flowrunner module.go).
-// flowLabel and flowRefMatches live in module_exchange.go.
+// Child flow identity helpers (ported from the legacy runner).
+// flowLabel and flowRefMatches live in the child flow exchange layer.
 
-// flowEntityDisabled reports whether the view.modules entity matching
+// flowEntityDisabled reports whether the view.childFlows entity matching
 // ref (by id or label) is flagged enabled:false.
 func flowEntityDisabled(w nodestore.WorkflowInterface, ref string) bool {
 	if w == nil || w.GetView() == nil || ref == "" {

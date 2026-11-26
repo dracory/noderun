@@ -157,8 +157,8 @@ func TestDisabledFunctionPassesThrough(t *testing.T) {
 	}
 }
 
-// TestDisabledFlowTab — every node of a module listed in
-// view.disabledModules is inert (Node-RED disabled tab equivalent).
+// TestDisabledFlowTab — every node of a child flow listed in
+// view.disabledFlows is inert (Node-RED disabled tab equivalent).
 func TestDisabledFlowTab(t *testing.T) {
 	workflow := &Workflow{
 		ID:   "test-disabled-tab",

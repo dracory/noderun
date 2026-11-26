@@ -216,9 +216,9 @@ func TestComponentEnvOverride(t *testing.T) {
 	}
 }
 
-// TestNodeREDImportRuns proves a Node-RED flow export — tab, component
-// definition with internal nodes at z=<defId>, and a component:<id>
-// instance — imports and deploys unmodified.
+// TestNodeREDImportRuns proves a Node-RED flow export — tab, external
+// subflow definition with internal nodes at z=<defId>, and an external
+// subflow:<id> instance — imports to canonical components and deploys.
 func TestNodeREDImportRuns(t *testing.T) {
 	flowJSON := `[
 		{"id":"tab1","type":"tab","label":"Main"},
@@ -230,7 +230,7 @@ func TestNodeREDImportRuns(t *testing.T) {
 		 "func":"msg.payload = env.get('GREETING') + ':' + msg.payload; return msg;","outputs":1,"wires":[[]]},
 		{"id":"nrInj","type":"inject","z":"tab1","x":100,"y":100,
 		 "payload":"hi","payloadType":"str","once":true,"wires":[["nrInst"]]},
-		{"id":"nrInst","type":"component:defX","z":"tab1","x":250,"y":100,"name":"Wrap 1","wires":[["nrDbg"]]},
+		{"id":"nrInst","type":"subflow:defX","z":"tab1","x":250,"y":100,"name":"Wrap 1","wires":[["nrDbg"]]},
 		{"id":"nrDbg","type":"debug","z":"tab1","x":400,"y":100,"active":true,"wires":[[]]}
 	]`
 
