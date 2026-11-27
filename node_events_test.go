@@ -174,3 +174,103 @@ func TestCompleteNode(t *testing.T) {
 	}
 	t.Fatal("complete node never fired — log2 never executed")
 }
+
+// TestCompleteNodeIgnoresObserverTraversals verifies that an observer
+// traversal draining is not reported as a fresh completion: with a
+// scope-all complete node and a status observer watching the change
+// node, the complete branch must still run exactly once.
+func TestCompleteNodeIgnoresObserverTraversals(t *testing.T) {
+	workflow := &Workflow{
+		ID:   "test-complete-observer-flow",
+		Name: "Complete Observer Flow",
+		Nodes: []Node{
+			{
+				ID:   "inj",
+				Type: "inject",
+				Data: map[string]interface{}{
+					"payload": `{"a":1}`,
+					"once":    true,
+				},
+			},
+			{
+				ID:   "chg",
+				Type: "change",
+				Data: map[string]interface{}{
+					"rules": []interface{}{
+						map[string]interface{}{"op": "set", "field": "b", "value": "2"},
+					},
+				},
+			},
+			{
+				ID:   "status1",
+				Type: "status",
+				Data: map[string]interface{}{
+					"scope": "selected",
+					"nodes": []interface{}{"chg"},
+				},
+			},
+			{
+				ID:   "logStatus",
+				Type: "log",
+				Data: map[string]interface{}{"message": "status seen", "level": "info"},
+			},
+			{
+				ID:   "comp",
+				Type: "complete",
+				Data: map[string]interface{}{"scope": "all"},
+			},
+			{
+				ID:   "logComplete",
+				Type: "log",
+				Data: map[string]interface{}{"message": "completed", "level": "info"},
+			},
+		},
+		Edges: []Edge{
+			{ID: "e1", Source: "inj", Target: "chg"},
+			{ID: "e2", Source: "status1", Target: "logStatus"},
+			{ID: "e3", Source: "comp", Target: "logComplete"},
+		},
+	}
+
+	engine := NewEngine()
+	if _, err := engine.DeployWorkflow(context.Background(), workflow, nil); err != nil {
+		t.Fatalf("deploy failed: %v", err)
+	}
+	defer func() { _ = engine.StopWorkflow(workflow.ID) }()
+
+	count := func(nodeID, message string) int {
+		_, _, events, _ := engine.GetWorkflowSnapshot(workflow.ID, 0)
+		n := 0
+		for _, ev := range events {
+			if ev.NodeID == nodeID && ev.Message == message {
+				n++
+			}
+		}
+		return n
+	}
+
+	// The selected status observer sees the change node's running and
+	// ok transitions. Wait for both observer branches plus the real
+	// completion so all potential re-fires have had a chance to emit.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if count("logStatus", "status seen") >= 2 && count("logComplete", "completed") >= 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := count("logStatus", "status seen"); got < 2 {
+		t.Fatalf("status observer ran %d times, expected at least 2", got)
+	}
+	if got := count("logComplete", "completed"); got < 1 {
+		t.Fatal("complete node never fired for the main traversal")
+	}
+
+	// Observer traversal drains enqueue their complete branches at the
+	// end of the traversal, just after the observer log event. Give any
+	// incorrect emissions a short window to land before counting.
+	time.Sleep(200 * time.Millisecond)
+	if got := count("logComplete", "completed"); got != 1 {
+		t.Fatalf("complete branch ran %d times, expected exactly 1", got)
+	}
+}

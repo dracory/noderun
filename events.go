@@ -146,10 +146,12 @@ func (e *WorkflowEngine) notifyStatus(workflowID string, node nodestore.NodeInte
 
 // notifyComplete fires when an injected message's downstream traversal
 // has drained: every complete node whose scope covers the triggering
-// node receives {complete: true}. Messages produced by a complete node
-// carry "fromComplete" so their own traversal end cannot re-fire it.
+// node receives {complete: true}. Messages produced by event-node
+// traversals carry their recursion-guard flags and do not count as
+// fresh flow completions — otherwise a scope-all complete node would
+// re-fire once for every observer branch that drains.
 func (e *WorkflowEngine) notifyComplete(workflowID, fromNodeID string, in nodestore.MessageInterface) {
-	if metadataFlag(in, "fromComplete") {
+	if metadataFlag(in, "fromCatch") || metadataFlag(in, "fromStatus") || metadataFlag(in, "fromComplete") {
 		return
 	}
 	for _, completeID := range e.NodesInScope(workflowID, fromNodeID, "complete") {
