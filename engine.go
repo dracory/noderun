@@ -473,10 +473,18 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 		e.runCtx[workflow.GetID()] = ctx
 	}
 	e.flows[workflow.GetID()] = workflow
+	var pausedMemoryResume []InboxItem
 	if workflow.GetPaused() {
 		e.paused[workflow.GetID()] = true
 	} else {
 		delete(e.paused, workflow.GetID())
+		// Deploying the unpaused form is an explicit lifecycle reset:
+		// durable rows are drained by executeWorkflow's survivor pass;
+		// the process-local fallback backlog has no survivor row, so it
+		// is carried through the redeploy and drained after activation.
+		pausedMemoryResume = append(pausedMemoryResume, e.pausedMemory[workflow.GetID()]...)
+		delete(e.pausedMemory, workflow.GetID())
+		delete(e.pausedSeqs, workflow.GetID())
 	}
 	// Stamp the run's workflow id on every node here — the single-
 	// threaded point before activation and traversals fan out.
@@ -513,7 +521,7 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 
 	// Start the workflow execution in a goroutine
 	activated := make(chan error, 1)
-	go e.executeWorkflow(ctx, workflow, input, activated, gen, activateOnly, deployMu)
+	go e.executeWorkflow(ctx, workflow, input, activated, gen, activateOnly, deployMu, pausedMemoryResume)
 
 	return workflow.GetID(), activated, nil
 }
@@ -616,7 +624,7 @@ func (e *WorkflowEngine) EmitEvent(workflowID, nodeID, nodeName, level, message 
 // only restricts which stopper nodes activate (nil = all). deployMu is
 // the per-workflow deploy lock taken in startRun, released here when
 // activation finishes.
-func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore.WorkflowInterface, input nodestore.MessageInterface, activated chan<- error, gen int64, only map[string]bool, deployMu *sync.Mutex) {
+func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore.WorkflowInterface, input nodestore.MessageInterface, activated chan<- error, gen int64, only map[string]bool, deployMu *sync.Mutex, pausedMemoryResume []InboxItem) {
 	var activationErr error
 	defer func() {
 		if activationErr != nil {
@@ -787,6 +795,10 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 		e.notePausedDurableRows(workflow.GetID(), survivingInboxRows)
 	} else {
 		go e.requeueDurable(ctx, workflow, survivingInboxRows)
+		if len(pausedMemoryResume) > 0 {
+			go e.requeuePausedMemory(ctx, workflow, pausedMemoryResume)
+		}
+		e.signalQueues(workflow.GetID())
 	}
 }
 

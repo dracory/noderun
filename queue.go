@@ -239,6 +239,19 @@ func (q *Queue) Arm(ctx context.Context) {
 				if rows[i].NodeID != q.node.GetID() {
 					continue
 				}
+				// A message can stage while activation is still arming this
+				// drainer. Its row is then both in memory and in the recovery
+				// snapshot; adopt only rows not already staged.
+				alreadyStaged := false
+				for _, entry := range q.entries {
+					if entry.seq == rows[i].Seq {
+						alreadyStaged = true
+						break
+					}
+				}
+				if alreadyStaged {
+					continue
+				}
 				q.entries = append(q.entries, queueEntry{
 					seq:        rows[i].Seq,
 					payload:    rows[i].Payload,
@@ -289,6 +302,12 @@ func (q *Queue) drainLoop(ctx context.Context) {
 // Returns false when the queue is empty, held or stopped — the loop
 // then waits for the next signal.
 func (q *Queue) drainOne(ctx context.Context) bool {
+	// The workflow pause gate closes before the queue pops an entry:
+	// staged rows remain queue-owned instead of being moved downstream
+	// merely because the drainer happened to poll while paused.
+	if q.engine.workflowPaused(q.workflowID) {
+		return false
+	}
 	q.mu.Lock()
 	if q.manual || q.hold || len(q.entries) == 0 {
 		q.mu.Unlock()

@@ -90,7 +90,25 @@ func (e *WorkflowEngine) ResumeWorkflow(workflowID string) error {
 	if len(memoryItems) > 0 {
 		go e.requeuePausedMemory(ctx, workflow, memoryItems)
 	}
+	e.signalQueues(workflowID)
 	return nil
+}
+
+// signalQueues wakes every live queue drainer for the workflow. Queue
+// drainers sleep while the pause gate is closed; resume is the event
+// that makes their already-staged items drainable again.
+func (e *WorkflowEngine) signalQueues(workflowID string) {
+	e.runMu.Lock()
+	var queues []*Queue
+	for _, state := range e.states[workflowID] {
+		if q, ok := state.(*Queue); ok {
+			queues = append(queues, q)
+		}
+	}
+	e.runMu.Unlock()
+	for _, q := range queues {
+		q.signal()
+	}
 }
 
 // workflowPaused reports whether the workflow's delivery gate is closed.
@@ -161,13 +179,36 @@ func (e *WorkflowEngine) admitPausedDownstreamLocked(workflowID, fromNodeID stri
 	if len(items) == 0 {
 		return nil
 	}
-	if e.DurableInboxStore == nil {
-		e.runMu.Lock()
-		e.pausedMemory[workflowID] = append(e.pausedMemory[workflowID], items...)
-		e.runMu.Unlock()
-		return nil
+	byID := make(map[string]nodestore.NodeInterface, len(workflow.GetNodes()))
+	for _, node := range workflow.GetNodes() {
+		byID[node.GetID()] = node
 	}
+
+	var memoryItems []InboxItem
 	for _, item := range items {
+		// Queue/checkpoint inputs are already staging-point handoffs.
+		// Stage them directly instead of writing an inbox row the live
+		// queue will never adopt (activation-time adoption only happens
+		// once). The queue itself persists before becoming drainable.
+		if node, ok := byID[item.NodeID]; ok && (node.GetType() == "queue" || node.GetType() == "checkpoint") {
+			checkpoint := node.GetType() == "checkpoint"
+			var routes []string
+			if checkpoint {
+				routes = nodebase.ParseCheckpointRoutes(node.GetData()["routes"])
+			}
+			q, err := e.EnsureQueue(node, checkpoint, routes)
+			if err != nil {
+				return fmt.Errorf("paused queue admission failed for node %q: %w", item.NodeID, err)
+			}
+			if err := q.Enqueue(item.Payload); err != nil {
+				return fmt.Errorf("paused queue admission failed for node %q: %w", item.NodeID, err)
+			}
+			continue
+		}
+		if e.DurableInboxStore == nil {
+			memoryItems = append(memoryItems, item)
+			continue
+		}
 		row := &DurableInboxItem{
 			WorkflowID: workflowID,
 			NodeID:     item.NodeID,
@@ -182,6 +223,11 @@ func (e *WorkflowEngine) admitPausedDownstreamLocked(workflowID, fromNodeID stri
 			e.pausedSeqs[workflowID] = map[int64]bool{}
 		}
 		e.pausedSeqs[workflowID][row.Seq] = true
+		e.runMu.Unlock()
+	}
+	if len(memoryItems) > 0 {
+		e.runMu.Lock()
+		e.pausedMemory[workflowID] = append(e.pausedMemory[workflowID], memoryItems...)
 		e.runMu.Unlock()
 	}
 	return nil
