@@ -23,7 +23,7 @@ func run() error {
 	}
 	defer func() { _ = engine.StopWorkflow(workflowID) }()
 
-	return waitForDebugMessage(engine, workflowID, `{"flowSees":"flow value","globalSees":"GoFlow","nodeSees":null}`, 3*time.Second)
+	return waitForDebugMessage(engine, workflowID, `{"nodeSees":null,"flowSees":"flow value","globalSees":"GoFlow"}`, 3*time.Second)
 }
 
 func contextScopesWorkflow() nodestore.WorkflowInterface {

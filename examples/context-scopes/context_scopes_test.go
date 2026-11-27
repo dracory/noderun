@@ -24,7 +24,7 @@ func TestRunPrintsScopeVisibility(t *testing.T) {
 	if runErr != nil {
 		t.Fatalf("run: %v", runErr)
 	}
-	if !bytes.Contains(output, []byte(`{"flowSees":"flow value","globalSees":"GoFlow","nodeSees":null}`)) {
+	if !bytes.Contains(output, []byte(`{"nodeSees":null,"flowSees":"flow value","globalSees":"GoFlow"}`)) {
 		t.Fatalf("expected scope report in output, got: %s", output)
 	}
 }

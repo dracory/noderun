@@ -41,7 +41,7 @@ go run ./examples/context-scopes
 Expected output:
 
 ```text
-{"flowSees":"flow value","globalSees":"GoFlow","nodeSees":null}
+{"nodeSees":null,"flowSees":"flow value","globalSees":"GoFlow"}
 ```
 
 `nodeSees` being `null` is the point: the writer's node context is
