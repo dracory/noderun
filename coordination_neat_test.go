@@ -315,3 +315,208 @@ func TestNeatCoordinationStoreIncrementReleaseRaceKeepsNotifyCount(t *testing.T)
 		}
 	}
 }
+
+func TestNeatCoordinationStoreExpiredClaimReusesOutcomeWithoutConsumingAgain(t *testing.T) {
+	store, _ := neatCoordinationTestStore(t, true)
+	store.SetCoordinationClaimTTLForTest(30 * time.Millisecond)
+	ctx := context.Background()
+	if err := store.IncrementSignal(ctx, "lease", map[string]interface{}{"worker": "owner"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.IncrementSignal(ctx, "lease", nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	parkTestWaiter(t, store, "lease-crash", "lease", 1)
+
+	released, _, err := store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(released) != 1 {
+		t.Fatalf("initial claim released=%d err=%v", len(released), err)
+	}
+	first := released[0]
+	if first.ClaimToken == "" || first.ClaimExpiresAt.IsZero() {
+		t.Fatalf("claim lease missing: %+v", first)
+	}
+
+	released, _, err = store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(released) != 0 {
+		t.Fatalf("live claim must not be handed to a second owner: released=%d err=%v", len(released), err)
+	}
+	time.Sleep(45 * time.Millisecond)
+	released, _, err = store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(released) != 1 {
+		t.Fatalf("expired claim was not reclaimed: released=%d err=%v", len(released), err)
+	}
+	second := released[0]
+	if second.ID != first.ID || second.ClaimToken == "" || second.ClaimToken == first.ClaimToken {
+		t.Fatalf("reclaim ownership wrong: first=%+v second=%+v", first, second)
+	}
+	if second.CachedMetadata["worker"] != "owner" {
+		t.Fatalf("stored release outcome lost cached metadata: %#v", second.CachedMetadata)
+	}
+	if err := store.AckWaiter(ctx, first.ID, first.ClaimToken); err == nil {
+		t.Fatal("stale claim token must not acknowledge a reclaimed waiter")
+	}
+	if err := store.AckWaiter(ctx, second.ID, second.ClaimToken); err != nil {
+		t.Fatalf("current owner ack: %v", err)
+	}
+	signal, ok, err := store.Signal(ctx, "lease")
+	if err != nil || !ok || signal.Count != 1 {
+		t.Fatalf("reclaim consumed count again: signal=%+v ok=%v err=%v, want remainder 1", signal, ok, err)
+	}
+	released, _, err = store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(released) != 0 {
+		t.Fatalf("acknowledged waiter reappeared: released=%d err=%v", len(released), err)
+	}
+}
+
+func TestNeatCoordinationStoreNackRetriesWithoutConsumingAgain(t *testing.T) {
+	store, _ := neatCoordinationTestStore(t, true)
+	ctx := context.Background()
+	if err := store.IncrementSignal(ctx, "nack", nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.IncrementSignal(ctx, "nack", nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	parkTestWaiter(t, store, "nack-waiter", "nack", 1)
+	released, _, err := store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(released) != 1 {
+		t.Fatalf("initial release=%d err=%v", len(released), err)
+	}
+	first := released[0]
+	if err := store.NackWaiter(ctx, first.ID, first.ClaimToken); err != nil {
+		t.Fatalf("nack: %v", err)
+	}
+	released, _, err = store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(released) != 1 {
+		t.Fatalf("nacked waiter was not retried immediately: released=%d err=%v", len(released), err)
+	}
+	if err := store.AckWaiter(ctx, released[0].ID, released[0].ClaimToken); err != nil {
+		t.Fatalf("ack retry: %v", err)
+	}
+	signal, ok, err := store.Signal(ctx, "nack")
+	if err != nil || !ok || signal.Count != 1 {
+		t.Fatalf("nack retry consumed count again: signal=%+v ok=%v err=%v, want remainder 1", signal, ok, err)
+	}
+}
+
+func TestNeatCoordinationStoreConcurrentConstructors(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "constructors.db")
+	dsn := "file:" + filepath.ToSlash(dbPath) + "?_pragma=busy_timeout(5000)"
+	const constructors = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, constructors)
+	for i := 0; i < constructors; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			db, err := sql.Open("sqlite", dsn)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer db.Close()
+			store, err := NewNeatCoordinationStore(db)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if err := store.IncrementSignal(context.Background(), "constructed", nil, 0); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent constructor/increment: %v unwrap=%+v", err, unwrapTestErrors(err))
+		}
+	}
+
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store, err := NewNeatCoordinationStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal, ok, err := store.Signal(context.Background(), "constructed")
+	if err != nil || !ok || signal.Count != constructors {
+		t.Fatalf("constructed signal=%+v ok=%v err=%v, want %d", signal, ok, err, constructors)
+	}
+}
+
+func TestNeatCoordinationStoreMigratesLegacyNullClaimColumns(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	_, err = db.Exec("CREATE TABLE node_coordination_signals (signal_key TEXT PRIMARY KEY, signal_count INTEGER, cached_metadata TEXT, expires_at TEXT, updated_at TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec("CREATE TABLE node_coordination_waiters (id TEXT PRIMARY KEY, signal_key TEXT, workflow_id TEXT, node_id TEXT, target_count INTEGER, payload TEXT, expires_at TEXT, created_at TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := "{\"id\":\"legacy-msg\",\"payload\":\"legacy\",\"metadata\":{}}"
+	_, err = db.Exec("INSERT INTO node_coordination_waiters (id, signal_key, workflow_id, node_id, target_count, payload, expires_at, created_at) VALUES (?,?,?,?,?,?,?,?)",
+		"legacy-waiter", "legacy-key", "wf", "wait", 1, payload, "", time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := NewNeatCoordinationStore(db)
+	if err != nil {
+		t.Fatalf("migrated constructor: %v", err)
+	}
+	if err := store.IncrementSignal(context.Background(), "legacy-key", nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	released, expired, err := store.PollWaiters(context.Background(), "wf", "wait")
+	if err != nil || len(expired) != 0 || len(released) != 1 {
+		t.Fatalf("legacy waiter did not release after claim-column migration: released=%d expired=%d err=%v", len(released), len(expired), err)
+	}
+	if err := store.AckWaiter(context.Background(), released[0].ID, released[0].ClaimToken); err != nil {
+		t.Fatalf("ack migrated legacy waiter: %v", err)
+	}
+}
+
+func TestNeatCoordinationStoreExpiredOutcomeSurvivesNackAndRetry(t *testing.T) {
+	store, _ := neatCoordinationTestStore(t, true)
+	ctx := context.Background()
+	expiredAt := time.Now().UTC().Add(-time.Second)
+	if err := store.ParkWaiter(ctx, nodebase.CoordinationWaiter{
+		ID: "expired-nack", SignalKey: "expired-key", WorkflowID: "wf", NodeID: "wait", TargetCount: 1,
+		Message: nodestore.NewMessage().SetPayload("late"), CreatedAt: expiredAt.Add(-time.Second), ExpiresAt: expiredAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, expired, err := store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(expired) != 1 {
+		t.Fatalf("initial expired claim=%d err=%v", len(expired), err)
+	}
+	first := expired[0]
+	if first.ClaimToken == "" {
+		t.Fatalf("expired claim missing token: %+v", first)
+	}
+	if err := store.NackWaiter(ctx, first.ID, first.ClaimToken); err != nil {
+		t.Fatalf("nack expired claim: %v", err)
+	}
+	_, expired, err = store.PollWaiters(ctx, "wf", "wait")
+	if err != nil || len(expired) != 1 || expired[0].ID != first.ID {
+		t.Fatalf("expired outcome did not survive nack/retry: expired=%+v err=%v", expired, err)
+	}
+	if err := store.AckWaiter(ctx, expired[0].ID, expired[0].ClaimToken); err != nil {
+		t.Fatalf("ack retried expired waiter: %v", err)
+	}
+	waiters, err := store.Waiters(ctx, "wf", "wait")
+	if err != nil || len(waiters) != 0 {
+		t.Fatalf("acknowledged expired waiter remains: %+v err=%v", waiters, err)
+	}
+}

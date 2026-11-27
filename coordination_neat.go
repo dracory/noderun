@@ -19,15 +19,22 @@ import (
 
 // coordination_neat.go is the production CoordinationStore: dedicated SQL
 // tables shared by every runner on the entity database. Count increments
-// use atomic SQL increment expressions; release consumes counts inside a
-// transaction that first atomically deletes the waiter row. A competing
-// runner therefore either wins both the waiter and the count or wins
-// neither. The SQL uses portable predicates and neat's dialect-aware query
-// builder — no SQLite-only upsert or locking syntax.
+// use atomic SQL increment expressions. Release claims lease the waiter row
+// and consume the count in one transaction; the row is deleted only by
+// AckWaiter after the caller proves the downstream handoff is durable. A
+// crashed owner's lease expires and the stored outcome is reclaimed without
+// consuming the count again. The SQL uses portable predicates and neat's
+// dialect-aware query builder — no SQLite-only upsert or locking syntax.
 
 const (
 	coordinationSignalsTable = "node_coordination_signals"
 	coordinationWaitersTable = "node_coordination_waiters"
+
+	coordinationClaimPending  = 0
+	coordinationClaimReleased = 1
+	coordinationClaimExpired  = 2
+
+	coordinationDefaultClaimTTL = 30 * time.Second
 )
 
 // coordinationTimeFormat stores UTC expiry/creation timestamps in a
@@ -49,14 +56,19 @@ type coordinationSignalRow struct {
 func (coordinationSignalRow) TableName() string { return coordinationSignalsTable }
 
 type coordinationWaiterRow struct {
-	ID          string `db:"id"`
-	SignalKey   string `db:"signal_key"`
-	WorkflowID  string `db:"workflow_id"`
-	NodeID      string `db:"node_id"`
-	TargetCount int64  `db:"target_count"`
-	Payload     string `db:"payload"`
-	ExpiresAt   string `db:"expires_at"`
-	CreatedAt   string `db:"created_at"`
+	ID              string `db:"id"`
+	SignalKey       string `db:"signal_key"`
+	WorkflowID      string `db:"workflow_id"`
+	NodeID          string `db:"node_id"`
+	TargetCount     int64  `db:"target_count"`
+	Payload         string `db:"payload"`
+	ExpiresAt       string `db:"expires_at"`
+	CreatedAt       string `db:"created_at"`
+	ClaimState      int    `db:"claim_state"`
+	ClaimActive     int    `db:"claim_active"`
+	ClaimToken      string `db:"claim_token"`
+	ClaimExpiresAt  string `db:"claim_expires_at"`
+	ReleaseMetadata string `db:"release_metadata"`
 }
 
 func (coordinationWaiterRow) TableName() string { return coordinationWaitersTable }
@@ -66,7 +78,8 @@ func (coordinationWaiterRow) TableName() string { return coordinationWaitersTabl
 // lease store so every runner sharing that database observes the same
 // signal counts and parked messages.
 type NeatCoordinationStore struct {
-	db *neat.Database
+	db       *neat.Database
+	claimTTL time.Duration
 
 	// lastSignalCleanupUnixNano throttles opportunistic cleanup because
 	// PollWaiters can run many times per second for every waiting node.
@@ -83,48 +96,157 @@ func NewNeatCoordinationStore(sqlDB *sql.DB) (*NeatCoordinationStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("neat coordination store: %w", err)
 	}
-	store := &NeatCoordinationStore{db: db}
+	store := &NeatCoordinationStore{db: db, claimTTL: coordinationDefaultClaimTTL}
 	if err := store.migrate(); err != nil {
 		return nil, fmt.Errorf("neat coordination store migrate: %w", err)
 	}
 	return store, nil
 }
 
+// SetCoordinationClaimTTLForTest shortens the ownership lease in focused
+// crash/reclaim tests. Production uses the conservative default above; the
+// method is exported only because noderun's integration tests are external.
+func (s *NeatCoordinationStore) SetCoordinationClaimTTLForTest(ttl time.Duration) {
+	s.claimTTL = ttl
+}
+
 func (s *NeatCoordinationStore) migrate() error {
 	schema := s.db.Schema()
-	if !schema.HasTable(coordinationSignalsTable) {
-		err := schema.Create(coordinationSignalsTable, func(t neatschema.Blueprint) {
-			t.String("signal_key")
-			t.BigInteger("signal_count")
-			t.Text("cached_metadata").Nullable()
-			t.String("expires_at").Nullable()
-			t.String("updated_at").Nullable()
-			t.Primary("signal_key")
-			t.Index("expires_at")
-		})
-		if err != nil {
+	err := createCoordinationTableIfMissing(schema, coordinationSignalsTable, func(t neatschema.Blueprint) {
+		t.String("signal_key")
+		t.BigInteger("signal_count")
+		t.Text("cached_metadata").Nullable()
+		t.String("expires_at").Nullable()
+		t.String("updated_at").Nullable()
+		t.Primary("signal_key")
+		t.Index("expires_at")
+	})
+	if err != nil {
+		return err
+	}
+	err = createCoordinationTableIfMissing(schema, coordinationWaitersTable, func(t neatschema.Blueprint) {
+		t.String("id")
+		t.String("signal_key")
+		t.String("workflow_id")
+		t.String("node_id")
+		t.BigInteger("target_count")
+		t.Text("payload")
+		t.String("expires_at").Nullable()
+		t.String("created_at")
+		t.Integer("claim_state").Nullable()
+		t.Integer("claim_active").Nullable()
+		t.String("claim_token").Nullable()
+		t.String("claim_expires_at").Nullable()
+		t.Text("release_metadata").Nullable()
+		t.Primary("id")
+		t.Index("signal_key")
+		t.Index("workflow_id")
+	})
+	if err != nil {
+		return err
+	}
+	// Upgrade path for tables created before ownership leasing existed. The
+	// feature is new, but keeping this idempotent also makes concurrent
+	// constructors safe when one runner is mid-migration.
+	for _, column := range []string{"claim_state", "claim_active", "claim_token", "claim_expires_at", "release_metadata"} {
+		if err := addCoordinationColumnIfMissing(schema, coordinationWaitersTable, column); err != nil {
 			return err
 		}
 	}
-	if !schema.HasTable(coordinationWaitersTable) {
-		err := schema.Create(coordinationWaitersTable, func(t neatschema.Blueprint) {
-			t.String("id")
-			t.String("signal_key")
-			t.String("workflow_id")
-			t.String("node_id")
-			t.BigInteger("target_count")
-			t.Text("payload")
-			t.String("expires_at").Nullable()
-			t.String("created_at")
-			t.Primary("id")
-			t.Index("signal_key")
-			t.Index("workflow_id")
-		})
-		if err != nil {
-			return err
+	return backfillCoordinationWaiterClaimColumns(s.db)
+}
+
+// backfillCoordinationWaiterClaimColumns normalizes rows that existed before
+// the leasing columns were added. SQL NULL is not equal to zero/empty in the
+// conditional claim predicates, so without this migration step legacy parked
+// rows would scan as pending in Go but never win their SQL claim update.
+// The updates are idempotent and safe for concurrent constructors.
+func backfillCoordinationWaiterClaimColumns(db *neat.Database) error {
+	updates := []struct {
+		column string
+		value  interface{}
+	}{
+		{column: "claim_state", value: coordinationClaimPending},
+		{column: "claim_active", value: 0},
+		{column: "claim_token", value: ""},
+		{column: "claim_expires_at", value: ""},
+		{column: "release_metadata", value: ""},
+	}
+	for _, update := range updates {
+		var lastErr error
+		for attempt := 0; attempt < 30; attempt++ {
+			_, lastErr = db.Query().Table(coordinationWaitersTable).
+				Where(update.column + " IS NULL").
+				Update(map[string]interface{}{update.column: update.value})
+			if lastErr == nil {
+				break
+			}
+			if !isCoordinationBusy(lastErr) {
+				return fmt.Errorf("backfill coordination waiter %s: %w", update.column, lastErr)
+			}
+			time.Sleep(time.Duration((attempt+1)*5+(attempt*7)%13) * time.Millisecond)
+		}
+		if lastErr != nil {
+			return fmt.Errorf("backfill coordination waiter %s: %w", update.column, lastErr)
 		}
 	}
 	return nil
+}
+
+func addCoordinationColumnIfMissing(schema neatschema.Schema, table, column string) error {
+	var lastErr error
+	for attempt := 0; attempt < 30; attempt++ {
+		if schema.HasColumn(table, column) {
+			return nil
+		}
+		lastErr = schema.Table(table, func(t neatschema.Blueprint) {
+			switch column {
+			case "claim_state", "claim_active":
+				t.Integer(column).Nullable()
+			case "release_metadata":
+				t.Text(column).Nullable()
+			default:
+				t.String(column).Nullable()
+			}
+		})
+		if lastErr == nil || schema.HasColumn(table, column) {
+			return nil
+		}
+		if !isCoordinationBusy(lastErr) && !isCoordinationAlreadyExists(lastErr) {
+			return lastErr
+		}
+		time.Sleep(time.Duration((attempt+1)*5+(attempt*7)%13) * time.Millisecond)
+	}
+	if schema.HasColumn(table, column) {
+		return nil
+	}
+	return lastErr
+}
+
+// createCoordinationTableIfMissing makes first-use DDL safe for several
+// runners constructing the store against the same empty database. neat
+// grammars intentionally emit plain CREATE TABLE (no portable IF NOT
+// EXISTS), so the losing runner re-checks existence after duplicate DDL;
+// transient lock contention is retried briefly.
+func createCoordinationTableIfMissing(schema neatschema.Schema, table string, build func(neatschema.Blueprint)) error {
+	var lastErr error
+	for attempt := 0; attempt < 30; attempt++ {
+		if schema.HasTable(table) {
+			return nil
+		}
+		lastErr = schema.Create(table, build)
+		if lastErr == nil || schema.HasTable(table) {
+			return nil
+		}
+		if !isCoordinationBusy(lastErr) && !isCoordinationAlreadyExists(lastErr) {
+			return lastErr
+		}
+		time.Sleep(time.Duration((attempt+1)*5+(attempt*7)%13) * time.Millisecond)
+	}
+	if schema.HasTable(table) {
+		return nil
+	}
+	return lastErr
 }
 
 // IncrementSignal implements nodebase.CoordinationStore. The increment is
@@ -257,6 +379,8 @@ func (s *NeatCoordinationStore) ParkWaiter(ctx context.Context, waiter nodebase.
 		Payload:     payload,
 		ExpiresAt:   expires,
 		CreatedAt:   created.Format(coordinationTimeFormat),
+		ClaimState:  coordinationClaimPending,
+		ClaimActive: 0,
 	})
 	if err != nil {
 		return fmt.Errorf("park coordination waiter: %w", err)
@@ -270,11 +394,12 @@ var (
 	errCoordinationShort      = errors.New("coordination signal count below target")
 )
 
-// PollWaiters implements nodebase.CoordinationStore. Expiry claims are a
-// single conditional DELETE. Release claims are transactional: the waiter
-// row is deleted first and the target-sized signal decrement must also
-// affect one row, otherwise the transaction rolls back. This coupling is
-// what prevents two runners from consuming the same count for one waiter.
+// PollWaiters implements nodebase.CoordinationStore. Rows are leased, not
+// deleted: the winner owns ClaimToken until AckWaiter/NackWaiter or until
+// ClaimExpiresAt passes. The first release claim consumes the signal count
+// and stores the outcome on the waiter row in the same transaction. A retry
+// after nack or crash therefore reuses that stored outcome and never consumes
+// the count a second time.
 func (s *NeatCoordinationStore) PollWaiters(ctx context.Context, workflowID, nodeID string) ([]nodebase.CoordinationWaiter, []nodebase.CoordinationWaiter, error) {
 	if workflowID == "" || nodeID == "" {
 		return nil, nil, fmt.Errorf("workflowID and nodeID are required")
@@ -284,46 +409,69 @@ func (s *NeatCoordinationStore) PollWaiters(ctx context.Context, workflowID, nod
 		log.Printf("warning: coordination signal cleanup failed: %v", err)
 	}
 
-	var expiringRows []coordinationWaiterRow
+	var rows []coordinationWaiterRow
 	if err := s.db.Query().Model(&coordinationWaiterRow{}).
-		Where("workflow_id = ? AND node_id = ? AND expires_at <> ''", workflowID, nodeID).
+		Where("workflow_id = ? AND node_id = ?", workflowID, nodeID).
 		OrderBy("created_at").
-		Find(&expiringRows); err != nil {
-		return nil, nil, fmt.Errorf("load expired coordination waiters: %w", err)
+		Find(&rows); err != nil {
+		return nil, nil, fmt.Errorf("load coordination waiters: %w", err)
 	}
-	expired := make([]nodebase.CoordinationWaiter, 0, len(expiringRows))
-	for _, row := range expiringRows {
-		if !expiredCoordinationValue(row.ExpiresAt, now) {
-			continue
-		}
+
+	released := make([]nodebase.CoordinationWaiter, 0, len(rows))
+	expired := make([]nodebase.CoordinationWaiter, 0)
+	for _, row := range rows {
 		msg, err := unmarshalInboxPayload(row.Payload)
 		if err != nil {
 			log.Printf("warning: dropping corrupt coordination waiter id=%s: %v", row.ID, err)
 			_, _ = s.db.Query().Model(&coordinationWaiterRow{}).Where("id = ?", row.ID).Delete()
 			continue
 		}
-		res, err := s.db.Query().Model(&coordinationWaiterRow{}).
-			Where("id = ? AND workflow_id = ? AND node_id = ?", row.ID, workflowID, nodeID).
-			Delete()
-		if err != nil {
-			return nil, nil, fmt.Errorf("claim expired coordination waiter: %w", err)
-		}
-		if res == nil || res.RowsAffected != 1 {
-			continue // another runner claimed it first
-		}
-		expired = append(expired, waiterFromRow(row, msg, nil))
-	}
 
-	var rows []coordinationWaiterRow
-	if err := s.db.Query().Model(&coordinationWaiterRow{}).
-		Where("workflow_id = ? AND node_id = ?", workflowID, nodeID).
-		OrderBy("created_at").
-		Find(&rows); err != nil {
-		return nil, expired, fmt.Errorf("load coordination waiters: %w", err)
-	}
-	released := make([]nodebase.CoordinationWaiter, 0, len(rows))
-	for _, row := range rows {
-		waiter, ok, err := s.tryRelease(row)
+		// A live claim belongs to another runner (or this owner's in-flight
+		// delivery). Expired claims become reclaimable below.
+		if row.ClaimActive == 1 && !expiredCoordinationValue(row.ClaimExpiresAt, now) {
+			continue
+		}
+
+		// A decided outcome survives nack/crash. Reclaim it without touching
+		// the signal count again.
+		if row.ClaimState != coordinationClaimPending {
+			waiter, ok, err := s.claimStoredOutcome(row, msg, now)
+			if err != nil {
+				return released, expired, err
+			}
+			if !ok {
+				continue
+			}
+			if waiterState(row) == coordinationClaimExpired {
+				expired = append(expired, waiter)
+			} else {
+				released = append(released, waiter)
+			}
+			continue
+		}
+
+		// A live-claim/expired-claim pending row should not exist in this
+		// implementation because outcome and first ownership are written in one
+		// transaction. Leave it leased rather than guessing whether its count
+		// was consumed; operators can inspect the row and the lease will not
+		// resurrect an ambiguous count state.
+		if row.ClaimActive == 1 {
+			continue
+		}
+
+		if expiredCoordinationValue(row.ExpiresAt, now) {
+			waiter, ok, err := s.claimExpired(row, msg, now)
+			if err != nil {
+				return released, expired, err
+			}
+			if ok {
+				expired = append(expired, waiter)
+			}
+			continue
+		}
+
+		waiter, ok, err := s.tryRelease(row, msg, now)
 		if err != nil {
 			return released, expired, err
 		}
@@ -334,25 +482,91 @@ func (s *NeatCoordinationStore) PollWaiters(ctx context.Context, workflowID, nod
 	return released, expired, nil
 }
 
-func (s *NeatCoordinationStore) tryRelease(row coordinationWaiterRow) (nodebase.CoordinationWaiter, bool, error) {
-	msg, err := unmarshalInboxPayload(row.Payload)
+func waiterState(row coordinationWaiterRow) int {
+	if row.ClaimState == coordinationClaimExpired {
+		return coordinationClaimExpired
+	}
+	return coordinationClaimReleased
+}
+
+func (s *NeatCoordinationStore) claimLease(now time.Time) (token, expires string) {
+	ttl := s.claimTTL
+	if ttl <= 0 {
+		ttl = coordinationDefaultClaimTTL
+	}
+	return nodebase.GenerateID(), now.Add(ttl).UTC().Format(coordinationTimeFormat)
+}
+
+func ownedWaiter(row coordinationWaiterRow, msg nodestore.MessageInterface, cached map[string]interface{}, token, claimExpires string) nodebase.CoordinationWaiter {
+	row.ClaimToken = token
+	row.ClaimExpiresAt = claimExpires
+	return waiterFromRow(row, msg, cached)
+}
+
+// claimStoredOutcome re-leases a row whose release/expired decision is already
+// durable. It handles both nacked rows (claim_active=0) and crash leftovers
+// whose prior lease expired (claim_active=1 with the exact old token/expiry).
+func (s *NeatCoordinationStore) claimStoredOutcome(row coordinationWaiterRow, msg nodestore.MessageInterface, now time.Time) (nodebase.CoordinationWaiter, bool, error) {
+	token, claimExpires := s.claimLease(now)
+	updates := map[string]interface{}{
+		"claim_active":     1,
+		"claim_token":      token,
+		"claim_expires_at": claimExpires,
+	}
+	var res *orm.Result
+	var err error
+	if row.ClaimActive == 1 {
+		res, err = s.db.Query().Table(coordinationWaitersTable).
+			Where("id = ? AND claim_active = 1 AND claim_token = ? AND claim_expires_at = ?", row.ID, row.ClaimToken, row.ClaimExpiresAt).
+			Update(updates)
+	} else {
+		res, err = s.db.Query().Table(coordinationWaitersTable).
+			Where("id = ? AND claim_active = 0 AND claim_state = ?", row.ID, row.ClaimState).
+			Update(updates)
+	}
 	if err != nil {
-		log.Printf("warning: dropping corrupt coordination waiter id=%s: %v", row.ID, err)
-		_, _ = s.db.Query().Model(&coordinationWaiterRow{}).Where("id = ?", row.ID).Delete()
+		return nodebase.CoordinationWaiter{}, false, fmt.Errorf("reclaim decided coordination waiter %q: %w", row.ID, err)
+	}
+	if res == nil || res.RowsAffected != 1 {
 		return nodebase.CoordinationWaiter{}, false, nil
 	}
 	cached := map[string]interface{}{}
+	if row.ClaimState == coordinationClaimReleased {
+		cached, err = unmarshalCachedMetadataJSON(row.ReleaseMetadata)
+		if err != nil {
+			return nodebase.CoordinationWaiter{}, false, fmt.Errorf("decode stored release metadata for waiter %q: %w", row.ID, err)
+		}
+	}
+	return ownedWaiter(row, msg, cached, token, claimExpires), true, nil
+}
+
+func (s *NeatCoordinationStore) claimExpired(row coordinationWaiterRow, msg nodestore.MessageInterface, now time.Time) (nodebase.CoordinationWaiter, bool, error) {
+	token, claimExpires := s.claimLease(now)
+	res, err := s.db.Query().Table(coordinationWaitersTable).
+		Where("id = ? AND claim_active = 0 AND claim_state = ?", row.ID, coordinationClaimPending).
+		Update(map[string]interface{}{
+			"claim_state":      coordinationClaimExpired,
+			"claim_active":     1,
+			"claim_token":      token,
+			"claim_expires_at": claimExpires,
+		})
+	if err != nil {
+		return nodebase.CoordinationWaiter{}, false, fmt.Errorf("claim expired coordination waiter %q: %w", row.ID, err)
+	}
+	if res == nil || res.RowsAffected != 1 {
+		return nodebase.CoordinationWaiter{}, false, nil
+	}
+	return ownedWaiter(row, msg, nil, token, claimExpires), true, nil
+}
+
+func (s *NeatCoordinationStore) tryRelease(row coordinationWaiterRow, msg nodestore.MessageInterface, now time.Time) (nodebase.CoordinationWaiter, bool, error) {
+	cached := map[string]interface{}{}
+	token, claimExpires := s.claimLease(now)
+	var err error
 	for attempt := 0; attempt < 20; attempt++ {
 		err = s.db.Transaction(func(tx orm.Query) error {
-			res, err := tx.Model(&coordinationWaiterRow{}).Where("id = ?", row.ID).Delete()
-			if err != nil {
-				return err
-			}
-			if res == nil || res.RowsAffected != 1 {
-				return errCoordinationWaiterGone
-			}
 			var signal coordinationSignalRow
-			err = tx.Model(&coordinationSignalRow{}).Where("signal_key = ?", row.SignalKey).First(&signal)
+			err := tx.Model(&coordinationSignalRow{}).Where("signal_key = ?", row.SignalKey).First(&signal)
 			if isCoordinationNotFound(err) {
 				return errCoordinationShort
 			}
@@ -366,6 +580,27 @@ func (s *NeatCoordinationStore) tryRelease(row coordinationWaiterRow) (nodebase.
 			if err != nil {
 				return err
 			}
+
+			// Ownership and the release decision are written before count
+			// consumption inside this transaction. If either the waiter claim or
+			// the conditional decrement loses its race, the transaction rolls
+			// back as one atomic unit.
+			res, err := tx.Table(coordinationWaitersTable).
+				Where("id = ? AND claim_active = 0 AND claim_state = ?", row.ID, coordinationClaimPending).
+				Update(map[string]interface{}{
+					"claim_state":      coordinationClaimReleased,
+					"claim_active":     1,
+					"claim_token":      token,
+					"claim_expires_at": claimExpires,
+					"release_metadata": signal.CachedMetadata,
+				})
+			if err != nil {
+				return err
+			}
+			if res == nil || res.RowsAffected != 1 {
+				return errCoordinationWaiterGone
+			}
+
 			res, err = tx.Table(coordinationSignalsTable).
 				Where("signal_key = ? AND signal_count >= ?", row.SignalKey, row.TargetCount).
 				Decrement("signal_count", row.TargetCount)
@@ -393,7 +628,49 @@ func (s *NeatCoordinationStore) tryRelease(row coordinationWaiterRow) (nodebase.
 	if err != nil {
 		return nodebase.CoordinationWaiter{}, false, fmt.Errorf("release coordination waiter %q: %w", row.ID, err)
 	}
-	return waiterFromRow(row, msg, cached), true, nil
+	return ownedWaiter(row, msg, cached, token, claimExpires), true, nil
+}
+
+// AckWaiter implements nodebase.CoordinationStore. It is the delete step and
+// is valid only for the current claim owner.
+func (s *NeatCoordinationStore) AckWaiter(ctx context.Context, waiterID, claimToken string) error {
+	if waiterID == "" || claimToken == "" {
+		return fmt.Errorf("coordination waiter id and claim token are required")
+	}
+	res, err := s.db.Query().Model(&coordinationWaiterRow{}).
+		Where("id = ? AND claim_active = 1 AND claim_token = ?", waiterID, claimToken).
+		Delete()
+	if err != nil {
+		return fmt.Errorf("ack coordination waiter: %w", err)
+	}
+	if res == nil || res.RowsAffected != 1 {
+		return fmt.Errorf("ack coordination waiter %q: claim is not owned by this token", waiterID)
+	}
+	return nil
+}
+
+// NackWaiter implements nodebase.CoordinationStore. It preserves the message
+// and decided outcome, but clears active ownership so the next poll retries
+// immediately. Counts are deliberately not restored: restoring them would
+// duplicate signal consumption and break the target-count contract.
+func (s *NeatCoordinationStore) NackWaiter(ctx context.Context, waiterID, claimToken string) error {
+	if waiterID == "" || claimToken == "" {
+		return fmt.Errorf("coordination waiter id and claim token are required")
+	}
+	res, err := s.db.Query().Table(coordinationWaitersTable).
+		Where("id = ? AND claim_active = 1 AND claim_token = ?", waiterID, claimToken).
+		Update(map[string]interface{}{
+			"claim_active":     0,
+			"claim_token":      "",
+			"claim_expires_at": "",
+		})
+	if err != nil {
+		return fmt.Errorf("nack coordination waiter: %w", err)
+	}
+	if res == nil || res.RowsAffected != 1 {
+		return fmt.Errorf("nack coordination waiter %q: claim is not owned by this token", waiterID)
+	}
+	return nil
 }
 
 // Signal implements nodebase.CoordinationStore for observability and tests.
@@ -499,6 +776,10 @@ func waiterFromRow(row coordinationWaiterRow, msg nodestore.MessageInterface, ca
 	if row.ExpiresAt != "" {
 		expires, _ = time.ParseInLocation(coordinationTimeFormat, row.ExpiresAt, time.UTC)
 	}
+	var claimExpires time.Time
+	if row.ClaimExpiresAt != "" {
+		claimExpires, _ = time.ParseInLocation(coordinationTimeFormat, row.ClaimExpiresAt, time.UTC)
+	}
 	return nodebase.CoordinationWaiter{
 		ID:             row.ID,
 		SignalKey:      row.SignalKey,
@@ -509,6 +790,8 @@ func waiterFromRow(row coordinationWaiterRow, msg nodestore.MessageInterface, ca
 		ExpiresAt:      expires,
 		CreatedAt:      created,
 		CachedMetadata: cached,
+		ClaimToken:     row.ClaimToken,
+		ClaimExpiresAt: claimExpires,
 	}
 }
 
@@ -577,6 +860,18 @@ func isCoordinationBusy(err error) bool {
 		strings.Contains(text, "could not serialize") ||
 		strings.Contains(text, "serialization failure") ||
 		strings.Contains(text, "40001")
+}
+
+func isCoordinationAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := coordinationErrorText(err)
+	return strings.Contains(text, "already exists") ||
+		strings.Contains(text, "duplicate table") ||
+		strings.Contains(text, "duplicate column") ||
+		strings.Contains(text, "42p07") ||
+		strings.Contains(text, "42701")
 }
 
 // Compile-time check: the SQL store satisfies the runner-neutral contract.

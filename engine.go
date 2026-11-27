@@ -650,6 +650,12 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 		executors[node.GetID()] = executor
 	}
 
+	// Snapshot restart/backlog rows before activation and before the deploy
+	// call can return. Without this pre-activation snapshot the asynchronous
+	// requeue loader can race the first new injection and admit the same new
+	// row both in the live traversal and in the recovery traversal.
+	survivingInboxRows := e.loadDurableInboxRows(workflow)
+
 	for _, node := range order {
 		executor := executors[node.GetID()]
 
@@ -725,12 +731,12 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 
 	e.EmitEvent(workflow.GetID(), "", "", "info", "workflow deployed")
 
-	// Re-queue surviving durable inbox rows in the background. Async so
-	// a large backlog cannot block DeployWorkflow past its timeout; the
-	// lease (held since startRun) guarantees only this runner drains
-	// them. In-order delivery is preserved inside the requeue
-	// traversal itself.
-	go e.requeueDurable(ctx, workflow)
+	// Drain the pre-activation survivor snapshot in the background. The
+	// snapshot query itself is deliberately synchronous: loading it later
+	// can confuse rows created by this run with crash leftovers. The lease
+	// (held since startRun) guarantees only this runner drains survivors,
+	// and in-order delivery is preserved inside the requeue traversal.
+	go e.requeueDurable(ctx, workflow, survivingInboxRows)
 }
 
 // errSuperseded reports that a run was replaced by a redeploy before its
@@ -960,7 +966,14 @@ func (e *WorkflowEngine) DeliverSync(workflowID, fromNodeID string, payload node
 	if payload.GetMetadata() == nil {
 		payload.SetMetadata(map[string]interface{}{})
 	}
-	e.ExecuteDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports)
+	report := &traversalReport{}
+	e.executeDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports, report)
+	if report.err != nil {
+		return report.err
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("workflow %q: downstream delivery interrupted: %w", workflowID, err)
+	}
 	return nil
 }
 
@@ -1160,6 +1173,14 @@ func (e *WorkflowEngine) MaxStepsLimit(workflow nodestore.WorkflowInterface) int
 // all other nodes fan out to every outgoing edge. A failing node aborts
 // only its own branch — sibling branches continue.
 func (e *WorkflowEngine) ExecuteDownstream(ctx context.Context, workflowID, fromNodeID string, workflow nodestore.WorkflowInterface, payload nodestore.MessageInterface, ports []string) {
+	e.executeDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports, nil)
+}
+
+// executeDownstream is ExecuteDownstream with an optional delivery report.
+// The report records only infrastructure failures that prevent durable
+// handoff persistence/traversal progress; ordinary node execution errors
+// are flow errors and stay on the error-port/catch path.
+func (e *WorkflowEngine) executeDownstream(ctx context.Context, workflowID, fromNodeID string, workflow nodestore.WorkflowInterface, payload nodestore.MessageInterface, ports []string, report *traversalReport) {
 	// The injected message is fully handled once this traversal ends —
 	// notify complete nodes scoped to the triggering node (Node-RED
 	// "complete" semantics). Guarded against self-recursion.
@@ -1175,24 +1196,22 @@ func (e *WorkflowEngine) ExecuteDownstream(ctx context.Context, workflowID, from
 		}
 	}
 
-	e.traverse(ctx, workflowID, workflow, func(inboxes *inbox, outEdges map[string][]nodestore.EdgeInterface, offer func(nodeID string, p nodestore.MessageInterface)) {
+	e.traverse(ctx, workflowID, workflow, func(inboxes *inbox, outEdges map[string][]nodestore.EdgeInterface, offer func(nodeID string, p nodestore.MessageInterface) error) {
 		for _, edge := range outEdges[fromNodeID] {
 			if allowed != nil && !allowed[edgePort(edge)] {
 				continue
 			}
 			offer(edge.GetTarget(), nodebase.ClonePayload(payload))
 		}
-	})
+	}, report)
 }
 
-// requeueDurable re-queues inbox rows that survived a previous run —
-// written by this runner before a crash/restart, or by a dead runner
-// whose workflow lease this runner just took over on a shared store.
-// Rows enter the traversal in seq order and each row is deleted as it
-// dequeues (at-least-once per row; see inbox_durable.go).
-func (e *WorkflowEngine) requeueDurable(ctx context.Context, workflow nodestore.WorkflowInterface) {
+// loadDurableInboxRows snapshots rows that survived a previous run. The
+// snapshot is taken before node activation so rows created by the new run
+// cannot be mistaken for crash leftovers.
+func (e *WorkflowEngine) loadDurableInboxRows(workflow nodestore.WorkflowInterface) []DurableInboxItem {
 	if e.DurableInboxStore == nil {
-		return
+		return nil
 	}
 	// Runner-aware load when the store supports it: pending rows +
 	// expired claims + rows still claimed by THIS runner (same-runner
@@ -1208,8 +1227,17 @@ func (e *WorkflowEngine) requeueDurable(ctx context.Context, workflow nodestore.
 	}
 	if err != nil {
 		e.EmitEvent(workflow.GetID(), "", "", "error", fmt.Sprintf("durable inbox reload failed: %v", err))
-		return
+		return nil
 	}
+	return rows
+}
+
+// requeueDurable re-queues the pre-activation snapshot of inbox rows that
+// survived a previous run — written by this runner before a crash/restart,
+// or by a dead runner whose workflow lease this runner just took over on a
+// shared store. Rows enter the traversal in seq order and each row is
+// deleted as it dequeues (at-least-once per row; see inbox_durable.go).
+func (e *WorkflowEngine) requeueDurable(ctx context.Context, workflow nodestore.WorkflowInterface, rows []DurableInboxItem) {
 	if len(rows) == 0 {
 		return
 	}
@@ -1224,7 +1252,7 @@ func (e *WorkflowEngine) requeueDurable(ctx context.Context, workflow nodestore.
 		byID[n.GetID()] = n
 	}
 
-	e.traverse(ctx, workflow.GetID(), workflow, func(inboxes *inbox, _ map[string][]nodestore.EdgeInterface, _ func(string, nodestore.MessageInterface)) {
+	e.traverse(ctx, workflow.GetID(), workflow, func(inboxes *inbox, _ map[string][]nodestore.EdgeInterface, _ func(string, nodestore.MessageInterface) error) {
 		for i := range rows {
 			if n, ok := byID[rows[i].NodeID]; ok && (n.GetType() == "queue" || n.GetType() == "checkpoint") {
 				continue
@@ -1249,7 +1277,20 @@ func (e *WorkflowEngine) requeueDurable(ctx context.Context, workflow nodestore.
 			}
 			_ = e.DurableInboxStore.DeleteInboxItem(workflow.GetID(), rows[i].Seq)
 		}
-	})
+	}, nil)
+}
+
+// traversalReport carries infrastructure delivery failures out of an
+// otherwise event-driven traversal. Node execution errors are intentional
+// flow outcomes and are deliberately not recorded here.
+type traversalReport struct {
+	err error
+}
+
+func (r *traversalReport) record(err error) {
+	if r != nil && r.err == nil && err != nil {
+		r.err = err
+	}
 }
 
 // traverse runs one inbox-draining traversal over the workflow graph.
@@ -1257,7 +1298,7 @@ func (e *WorkflowEngine) requeueDurable(ctx context.Context, workflow nodestore.
 // and the policy-aware offer closure; everything admitted is then
 // executed in queue order until the inbox drains, the context is
 // cancelled, or the step quota (MaxStepsLimit) trips.
-func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workflow nodestore.WorkflowInterface, seed func(inboxes *inbox, outEdges map[string][]nodestore.EdgeInterface, offer func(nodeID string, p nodestore.MessageInterface))) {
+func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workflow nodestore.WorkflowInterface, seed func(inboxes *inbox, outEdges map[string][]nodestore.EdgeInterface, offer func(nodeID string, p nodestore.MessageInterface) error), report *traversalReport) {
 	byID := make(map[string]nodestore.NodeInterface, len(workflow.GetNodes()))
 	for _, node := range workflow.GetNodes() {
 		byID[node.GetID()] = node
@@ -1297,7 +1338,7 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 	// inbox policy and reports drops/evictions to the event log and
 	// catch nodebase. Each offered clone is stamped with the current
 	// step count so follow-up traversals continue the same lineage.
-	offer := func(nodeID string, p nodestore.MessageInterface) {
+	offer := func(nodeID string, p nodestore.MessageInterface) error {
 		if p != nil {
 			carriedSteps(p)
 			if p.GetMetadata() == nil {
@@ -1307,10 +1348,13 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 		}
 		res, err := inboxes.offer(InboxItem{NodeID: nodeID, Payload: p})
 		if err != nil {
-			e.EmitEvent(workflowID, nodeID, "", "error", fmt.Sprintf("inbox enqueue failed: %v", err))
-			return
+			err = fmt.Errorf("inbox enqueue failed for node %q: %w", nodeID, err)
+			report.record(err)
+			e.EmitEvent(workflowID, nodeID, "", "error", err.Error())
+			return err
 		}
 		e.reportOffer(workflowID, byID, res)
+		return nil
 	}
 
 	// dispatchItem runs one queued item to completion: node lookup,
@@ -1403,12 +1447,15 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 		// Abort promptly when the workflow was stopped mid-traversal —
 		// Node-RED's close() cancels in-flight work for the flow.
 		if err := ctx.Err(); err != nil {
+			report.record(fmt.Errorf("traversal stopped: %w", err))
 			e.EmitEvent(workflowID, "", "", "warn", "traversal stopped: workflow is stopping")
 			return
 		}
 		item, ok, err := inboxes.next()
 		if err != nil {
-			e.EmitEvent(workflowID, "", "", "error", fmt.Sprintf("inbox dequeue failed: %v", err))
+			err = fmt.Errorf("inbox dequeue failed: %w", err)
+			report.record(err)
+			e.EmitEvent(workflowID, "", "", "error", err.Error())
 			return
 		}
 		if !ok {

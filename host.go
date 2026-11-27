@@ -1,6 +1,7 @@
 package noderunner
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -119,6 +120,23 @@ func (e *WorkflowEngine) EnsureQueue(node nodestore.NodeInterface, checkpoint bo
 	}
 	q.mu.Unlock()
 	return q, nil
+}
+
+// EmitDurable is the coordination-boundary emission used by wait: unlike
+// fire-and-forget Emit, it requires the durable inbox backend, runs the
+// downstream traversal synchronously, and returns infrastructure failures
+// (enqueue/dequeue/cancellation) so the caller can retain ownership of a
+// parked message. Ordinary node execution errors remain flow errors and
+// are not surfaced here — the durability question is whether the handoff
+// itself was persisted and drained.
+func (e *WorkflowEngine) EmitDurable(workflowID, nodeID string, payload nodestore.MessageInterface, ports []string) error {
+	if payload == nil {
+		return fmt.Errorf("durable emission failed: payload is nil")
+	}
+	if e.DurableInboxStore == nil {
+		return fmt.Errorf("durable emission unavailable: no durable inbox store configured")
+	}
+	return e.DeliverSync(workflowID, nodeID, payload, ports)
 }
 
 // compile-time assertion: the engine is the reference NodeHost.
