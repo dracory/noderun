@@ -138,6 +138,7 @@ type Workflow struct {
 	Edges       []Edge                 `json:"edges"`
 	View        map[string]interface{} `json:"view,omitempty"`
 	Deployed    bool                   `json:"deployed,omitempty"`
+	Paused      bool                   `json:"paused,omitempty"`
 	CreatedAt   time.Time              `json:"createdAt"`
 	UpdatedAt   time.Time              `json:"updatedAt"`
 
@@ -233,7 +234,7 @@ func (w *Workflow) toStore() nodestore.WorkflowInterface {
 	if w.View != nil {
 		wf.SetView(w.View)
 	}
-	wf.SetDescription(w.Description).SetDeployed(w.Deployed)
+	wf.SetDescription(w.Description).SetDeployed(w.Deployed).SetPaused(w.Paused)
 	return wf
 }
 
@@ -288,6 +289,11 @@ func (w *Workflow) GetDeployed() bool { return w.store().GetDeployed() }
 func (w *Workflow) SetDeployed(d bool) nodestore.WorkflowInterface {
 	w.Deployed = d
 	return w.store().SetDeployed(d)
+}
+func (w *Workflow) GetPaused() bool { return w.store().GetPaused() }
+func (w *Workflow) SetPaused(p bool) nodestore.WorkflowInterface {
+	w.Paused = p
+	return w.store().SetPaused(p)
 }
 func (w *Workflow) GetCreatedAt() time.Time { return w.store().GetCreatedAt() }
 func (w *Workflow) SetCreatedAt(t time.Time) nodestore.WorkflowInterface {

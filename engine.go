@@ -44,6 +44,20 @@ type WorkflowEngine struct {
 	// inject external messages (e.g. HTTP trigger requests) into the
 	// downstream node graph
 	flows map[string]nodestore.WorkflowInterface
+	// paused holds the workflow-level delivery gate. A paused workflow
+	// stays deployed (triggers remain live) but new downstream deliveries
+	// are admitted into the durable backlog instead of dispatched.
+	paused map[string]bool
+	// pausedSeqs tracks the durable inbox rows admitted while paused.
+	// Tracking the exact seqs lets resume drain the pause backlog without
+	// duplicating rows still owned by pre-pause in-flight traversals.
+	pausedSeqs map[string]map[int64]bool
+	// pausedMemory is the no-durable-store fallback backlog. It is
+	// process-local by necessity; durability requires DurableInboxStore.
+	pausedMemory map[string][]InboxItem
+	// pauseLocks serializes pause/resume transitions with paused
+	// admissions, so a row cannot be written after resume's backlog snapshot.
+	pauseLocks map[string]*sync.Mutex
 	// pending correlates injected messages with their response channels,
 	// keyed by message ID (e.g. an HTTP request awaiting an httpResponse)
 	pending map[string]chan nodestore.MessageInterface
@@ -204,6 +218,10 @@ func NewWorkflowEngine() *WorkflowEngine {
 		journal:       make(map[string]map[string][]nodebase.RunJournalEntry),
 		stoppers:      make(map[string][]nodebase.Stopper),
 		flows:         make(map[string]nodestore.WorkflowInterface),
+		paused:        make(map[string]bool),
+		pausedSeqs:    make(map[string]map[int64]bool),
+		pausedMemory:  make(map[string][]InboxItem),
+		pauseLocks:    make(map[string]*sync.Mutex),
 		pending:       make(map[string]chan nodestore.MessageInterface),
 		states:        make(map[string]map[string]interface{}),
 		runCtx:        make(map[string]context.Context),
@@ -320,6 +338,19 @@ func (e *WorkflowEngine) deployLock(workflowID string) *sync.Mutex {
 	if mu == nil {
 		mu = &sync.Mutex{}
 		e.deployLocks[workflowID] = mu
+	}
+	return mu
+}
+
+// pauseLock returns the per-workflow mutex serializing pause/resume
+// transitions with paused admissions (created lazily).
+func (e *WorkflowEngine) pauseLock(workflowID string) *sync.Mutex {
+	e.runMu.Lock()
+	defer e.runMu.Unlock()
+	mu := e.pauseLocks[workflowID]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		e.pauseLocks[workflowID] = mu
 	}
 	return mu
 }
@@ -442,6 +473,11 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 		e.runCtx[workflow.GetID()] = ctx
 	}
 	e.flows[workflow.GetID()] = workflow
+	if workflow.GetPaused() {
+		e.paused[workflow.GetID()] = true
+	} else {
+		delete(e.paused, workflow.GetID())
+	}
 	// Stamp the run's workflow id on every node here — the single-
 	// threaded point before activation and traversals fan out.
 	// executorForNode also stamps defensively, but doing it there
@@ -488,9 +524,17 @@ func (e *WorkflowEngine) StopWorkflow(workflowID string) error {
 	// AFTER releasing it — a stopper's Shutdown can take seconds (e.g.
 	// the httpTrigger's 5s drain), and holding runMu through that
 	// stalls status, events, inject and DiscardPending.
+	pauseMu := e.pauseLock(workflowID)
+	pauseMu.Lock()
 	e.runMu.Lock()
 	cancel, exists := e.running[workflowID]
 	stoppers := e.stoppers[workflowID]
+	if flow := e.flows[workflowID]; flow != nil {
+		flow.SetPaused(false)
+	}
+	delete(e.paused, workflowID)
+	delete(e.pausedSeqs, workflowID)
+	delete(e.pausedMemory, workflowID)
 	delete(e.stoppers, workflowID)
 	delete(e.flows, workflowID)
 	delete(e.states, workflowID)
@@ -513,6 +557,7 @@ func (e *WorkflowEngine) StopWorkflow(workflowID string) error {
 	// we don't own it.
 	e.releaseLease(workflowID)
 	e.runMu.Unlock()
+	pauseMu.Unlock()
 
 	// Notify the run-lifecycle observer (e.g. the dashboard hub) so
 	// observer-held run state is dropped alongside the engine's.
@@ -736,7 +781,13 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 	// can confuse rows created by this run with crash leftovers. The lease
 	// (held since startRun) guarantees only this runner drains survivors,
 	// and in-order delivery is preserved inside the requeue traversal.
-	go e.requeueDurable(ctx, workflow, survivingInboxRows)
+	// A paused-flagged deploy is the exception: survivors stay persisted
+	// and are only recorded as the explicit resume backlog.
+	if e.workflowPaused(workflow.GetID()) {
+		e.notePausedDurableRows(workflow.GetID(), survivingInboxRows)
+	} else {
+		go e.requeueDurable(ctx, workflow, survivingInboxRows)
+	}
 }
 
 // errSuperseded reports that a run was replaced by a redeploy before its
@@ -860,17 +911,24 @@ type injectFirer interface {
 // downstream traversal. ports filters which outgoing edges of
 // fromNodeID seed the traversal — nil means every outgoing edge.
 func (e *WorkflowEngine) inject(workflowID, fromNodeID string, payload nodestore.MessageInterface, ports []string) (string, chan nodestore.MessageInterface, error) {
+	pauseMu := e.pauseLock(workflowID)
+	pauseMu.Lock()
 	e.runMu.Lock()
 	workflow, ok := e.flows[workflowID]
 	if !ok {
 		e.runMu.Unlock()
+		pauseMu.Unlock()
 		return "", nil, fmt.Errorf("workflow %q is not running", workflowID)
 	}
-	if limit := e.inflightLimit(); limit >= 0 && e.inflight >= limit {
-		e.runMu.Unlock()
-		return "", nil, fmt.Errorf("workflow %q: inflight traversal limit %d reached", workflowID, limit)
+	paused := e.paused[workflowID]
+	if !paused {
+		if limit := e.inflightLimit(); limit >= 0 && e.inflight >= limit {
+			e.runMu.Unlock()
+			pauseMu.Unlock()
+			return "", nil, fmt.Errorf("workflow %q: inflight traversal limit %d reached", workflowID, limit)
+		}
+		e.inflight++
 	}
-	e.inflight++
 	e.seq++
 	msgID := fmt.Sprintf("msg-%d", e.seq)
 	ch := make(chan nodestore.MessageInterface, 1)
@@ -902,6 +960,18 @@ func (e *WorkflowEngine) inject(workflowID, fromNodeID string, payload nodestore
 	if payload.GetID() == "" {
 		payload.SetID(nodebase.GenerateID())
 	}
+
+	if paused {
+		err := e.admitPausedDownstreamLocked(workflowID, fromNodeID, workflow, payload, ports)
+		pauseMu.Unlock()
+		if err != nil {
+			e.DiscardPending(msgID)
+			e.EmitEvent(workflowID, fromNodeID, "", "error", err.Error())
+			return "", nil, err
+		}
+		return msgID, ch, nil
+	}
+	pauseMu.Unlock()
 
 	// Execute the downstream subgraph in the background; an httpResponse
 	// node (or the fallback timeout in the caller) resolves the request.
@@ -944,28 +1014,42 @@ func (e *WorkflowEngine) inflightDone() {
 // ports restricts which outgoing edges of fromNodeID are seeded
 // (nil = all edges); checkpoint route releases pass a single port.
 func (e *WorkflowEngine) DeliverSync(workflowID, fromNodeID string, payload nodestore.MessageInterface, ports []string) error {
+	pauseMu := e.pauseLock(workflowID)
+	pauseMu.Lock()
 	e.runMu.Lock()
 	workflow, ok := e.flows[workflowID]
 	if !ok {
 		e.runMu.Unlock()
+		pauseMu.Unlock()
 		return fmt.Errorf("workflow %q is not running", workflowID)
 	}
-	if limit := e.inflightLimit(); limit >= 0 && e.inflight >= limit {
-		e.runMu.Unlock()
-		return fmt.Errorf("workflow %q: inflight traversal limit %d reached", workflowID, limit)
+	paused := e.paused[workflowID]
+	if !paused {
+		if limit := e.inflightLimit(); limit >= 0 && e.inflight >= limit {
+			e.runMu.Unlock()
+			pauseMu.Unlock()
+			return fmt.Errorf("workflow %q: inflight traversal limit %d reached", workflowID, limit)
+		}
+		e.inflight++
 	}
-	e.inflight++
 	ctx, ok := e.runCtx[workflowID]
 	if !ok || ctx == nil {
 		ctx = context.Background()
 	}
 	e.runMu.Unlock()
 
-	defer e.inflightDone()
-
 	if payload.GetMetadata() == nil {
 		payload.SetMetadata(map[string]interface{}{})
 	}
+	if paused {
+		err := e.admitPausedDownstreamLocked(workflowID, fromNodeID, workflow, payload, ports)
+		pauseMu.Unlock()
+		return err
+	}
+	pauseMu.Unlock()
+
+	defer e.inflightDone()
+
 	report := &traversalReport{}
 	e.executeDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports, report)
 	if report.err != nil {
@@ -1166,6 +1250,21 @@ func (e *WorkflowEngine) MaxStepsLimit(workflow nodestore.WorkflowInterface) int
 	return DefaultMaxSteps
 }
 
+// activeTraversalContextKey marks contexts belonging to a delivery that
+// was admitted before the workflow pause gate closed. Nested synchronous
+// emissions (sequence nodes, function-node send, link helpers) inherit it,
+// so an in-flight traversal can finish even after PauseWorkflow is called.
+type activeTraversalContextKey struct{}
+
+func contextWithActiveTraversal(ctx context.Context) context.Context {
+	return context.WithValue(ctx, activeTraversalContextKey{}, true)
+}
+
+func isActiveTraversalContext(ctx context.Context) bool {
+	active, _ := ctx.Value(activeTraversalContextKey{}).(bool)
+	return active
+}
+
 // ExecuteDownstream performs an edge-aware breadth-first traversal of the
 // nodes downstream of fromNodeID. Each queued item carries its own payload
 // clone so fan-out branches do not share (and mutate) the same Data map.
@@ -1173,6 +1272,22 @@ func (e *WorkflowEngine) MaxStepsLimit(workflow nodestore.WorkflowInterface) int
 // all other nodes fan out to every outgoing edge. A failing node aborts
 // only its own branch — sibling branches continue.
 func (e *WorkflowEngine) ExecuteDownstream(ctx context.Context, workflowID, fromNodeID string, workflow nodestore.WorkflowInterface, payload nodestore.MessageInterface, ports []string) {
+	if !isActiveTraversalContext(ctx) {
+		pauseMu := e.pauseLock(workflowID)
+		pauseMu.Lock()
+		e.runMu.Lock()
+		paused := e.paused[workflowID]
+		e.runMu.Unlock()
+		if paused {
+			err := e.admitPausedDownstreamLocked(workflowID, fromNodeID, workflow, payload, ports)
+			pauseMu.Unlock()
+			if err != nil {
+				e.EmitEvent(workflowID, fromNodeID, "", "error", err.Error())
+			}
+			return
+		}
+		pauseMu.Unlock()
+	}
 	e.executeDownstream(ctx, workflowID, fromNodeID, workflow, payload, ports, nil)
 }
 
@@ -1299,6 +1414,10 @@ func (r *traversalReport) record(err error) {
 // executed in queue order until the inbox drains, the context is
 // cancelled, or the step quota (MaxStepsLimit) trips.
 func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workflow nodestore.WorkflowInterface, seed func(inboxes *inbox, outEdges map[string][]nodestore.EdgeInterface, offer func(nodeID string, p nodestore.MessageInterface) error), report *traversalReport) {
+	// Mark this delivery as admitted. Node code reusing its Execute ctx
+	// for nested downstream emissions is part of the same in-flight
+	// traversal and is therefore allowed to finish after a later pause.
+	ctx = contextWithActiveTraversal(ctx)
 	byID := make(map[string]nodestore.NodeInterface, len(workflow.GetNodes()))
 	for _, node := range workflow.GetNodes() {
 		byID[node.GetID()] = node
@@ -1676,9 +1795,13 @@ func (e *WorkflowEngine) QueueHandle(workflowID, nodeID string) (nodebase.QueueI
 // GetWorkflowStatus returns the status of a workflow execution
 func (e *WorkflowEngine) GetWorkflowStatus(workflowID string) (string, error) {
 	e.runMu.Lock()
+	paused := e.paused[workflowID]
 	_, running := e.running[workflowID]
 	e.runMu.Unlock()
 
+	if paused {
+		return "paused", nil
+	}
 	if running {
 		return "running", nil
 	}
