@@ -81,8 +81,7 @@ func completeStatusWorkflow() nodestore.WorkflowInterface {
 		// completed message, so a change node writes the human-readable
 		// line before printing.
 		nodestore.NewNode("complete-watch", "complete").SetData(map[string]interface{}{
-			"scope": "selected",
-			"nodes": []interface{}{"inject-start"},
+			"scope": "all",
 		}),
 		nodestore.NewNode("change-complete", "change").SetData(map[string]interface{}{
 			"rules": []interface{}{

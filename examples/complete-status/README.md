@@ -16,13 +16,13 @@ Neither observer is wired to the main branch — the engine feeds them:
   `running`, one `ok`.
 - The **complete** node fires once the injected message's downstream
   traversal has fully drained — the flow-level equivalent of "the work is
-  done". Its branch prints `main branch finished`. It is scoped to the
-  inject node on purpose: every observer traversal draining is itself a
-  completion, so a scope-all complete node would re-fire for each status
-  message too — scoping to the trigger keeps it exactly-once.
+  done". Its branch prints `main branch finished`. It is scoped to `all`,
+  and still fires exactly once: observer traversals are event-flagged, so
+  their drains do not count as flow completions.
 
-Both observer messages carry recursion guards (`fromStatus` / `fromComplete`
-metadata), so observers cannot re-trigger themselves.
+Observer messages carry recursion guards (`fromStatus` / `fromComplete`
+metadata), so observers cannot re-trigger themselves — and those same flags
+stop their traversal drains from re-firing complete nodes.
 
 Run from the `noderun` module root:
 
