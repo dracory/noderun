@@ -171,6 +171,11 @@ type WorkflowEngine struct {
 	// contextMem backs ResolvedContextStore() when no persistent nodebase.ContextStore
 	// is configured.
 	contextMem nodebase.ContextStore
+	// CoordinationStore is the durable distributed wait/notify coordination
+	// store. Nil disables wait/notify nodes explicitly; there is no
+	// process-local fallback because the contract is multi-runner state.
+	// Wired by the admin surface via NeatCoordinationStore.
+	CoordinationStore nodebase.CoordinationStore
 	// globalEnv holds the resolved global-config env vars (Node-RED
 	// parity: a deployment-wide env layer consulted by env.get after
 	// group/component/flow and before the OS environment). Set via

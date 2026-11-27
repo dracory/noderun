@@ -123,3 +123,10 @@ func (e *WorkflowEngine) EnsureQueue(node nodestore.NodeInterface, checkpoint bo
 
 // compile-time assertion: the engine is the reference NodeHost.
 var _ nodebase.NodeHost = (*WorkflowEngine)(nil)
+
+// ResolvedCoordinationStore returns the configured durable coordination
+// store backing wait/notify. Nil means the nodes must fail explicitly —
+// there is deliberately no process-local fallback for distributed state.
+func (e *WorkflowEngine) ResolvedCoordinationStore() nodebase.CoordinationStore {
+	return e.CoordinationStore
+}
