@@ -17,7 +17,7 @@ import (
 // control every admission through InjectMessage.
 func pauseTestFlow(id string) nodestore.WorkflowInterface {
 	return nodestore.NewWorkflow(id).SetID(id).SetNodes([]nodestore.NodeInterface{
-		nodestore.NewNode("inj", "junction").SetData(map[string]interface{}{}),
+		nodestore.NewNode("inj", "inject").SetData(map[string]interface{}{"interval": 3600}),
 		nodestore.NewNode("dbg", "debug").SetData(map[string]interface{}{}),
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inj", "dbg"),
@@ -209,6 +209,7 @@ func TestPauseAllowsInFlightTraversalToComplete(t *testing.T) {
 		nodestore.NewNode("inj", "junction").SetData(map[string]interface{}{}),
 		nodestore.NewNode("block", "pause-block-test").SetData(map[string]interface{}{}),
 		nodestore.NewNode("dbg", "debug").SetData(map[string]interface{}{}),
+		nodestore.NewNode("keepalive", "inject").SetData(map[string]interface{}{"interval": 3600}),
 	}).SetEdges([]nodestore.EdgeInterface{
 		nodestore.NewEdge("e1", "inj", "block"),
 		nodestore.NewEdge("e2", "block", "dbg"),
@@ -254,7 +255,9 @@ func TestPauseStagesQueueInputsWithoutDrainingThem(t *testing.T) {
 	engine.DurableInboxStore = durable
 	workflowID := "pause-queue"
 
-	if _, err := engine.ExecuteWorkflow(ctx, queueTestFlow(workflowID, map[string]interface{}{}), nil); err != nil {
+	flow := queueTestFlow(workflowID, map[string]interface{}{})
+	flow.AddNode(nodestore.NewNode("keepalive", "inject").SetData(map[string]interface{}{"interval": 3600}))
+	if _, err := engine.ExecuteWorkflow(ctx, flow, nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
 	defer engine.StopWorkflow(workflowID)
@@ -328,6 +331,7 @@ func TestResumeDeployedKeepsPausedWorkflowPaused(t *testing.T) {
 			nodestore.NewNode("src", "junction").SetData(map[string]interface{}{}),
 			nodestore.NewNode("mid", "junction").SetData(map[string]interface{}{}),
 			nodestore.NewNode("dbg", "debug").SetData(map[string]interface{}{}),
+			nodestore.NewNode("keepalive", "inject").SetData(map[string]interface{}{"interval": 3600}),
 		}).
 		SetEdges([]nodestore.EdgeInterface{
 			nodestore.NewEdge("e1", "src", "mid"),

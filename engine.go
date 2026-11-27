@@ -295,7 +295,9 @@ func (e *WorkflowEngine) ExecuteWorkflow(ctx context.Context, workflow nodestore
 }
 
 // DeployWorkflow starts a workflow and waits for activation to finish.
-// A failed activation (e.g. a trigger that cannot bind its port) is
+// The workflow entity's paused flag is honored: true activates with the
+// delivery gate closed; false is an explicit unpause and drains the pause
+// backlog after activation. A failed activation (e.g. a trigger that cannot bind its port) is
 // returned as an error, and no listener is left running. A redeploy of
 // a running workflow is a FULL deploy: every node restarts.
 func (e *WorkflowEngine) DeployWorkflow(ctx context.Context, workflow nodestore.WorkflowInterface, input nodestore.MessageInterface) (string, error) {
@@ -526,7 +528,9 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 	return workflow.GetID(), activated, nil
 }
 
-// StopWorkflow stops a running workflow
+// StopWorkflow stops a running workflow. Stop is terminal for the pause
+// lifecycle too: the runtime gate and memory-only pause backlog are cleared;
+// durable inbox rows remain persisted for a future deploy.
 func (e *WorkflowEngine) StopWorkflow(workflowID string) error {
 	// Copy state and clear the maps under the lock, but stop stoppers
 	// AFTER releasing it — a stopper's Shutdown can take seconds (e.g.
@@ -639,6 +643,16 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 		if len(e.stoppers[workflow.GetID()]) == 0 && e.runCtx[workflow.GetID()] == ctx && e.runGen[workflow.GetID()] == gen {
 			delete(e.running, workflow.GetID())
 			delete(e.runCtx, workflow.GetID())
+			// A flow without long-lived stoppers reaches its terminal
+			// stopped state when activation completes. Like an explicit
+			// stop, that transition clears the pause gate; durable rows
+			// themselves remain persisted for a future deploy.
+			if flow := e.flows[workflow.GetID()]; flow != nil {
+				flow.SetPaused(false)
+			}
+			delete(e.paused, workflow.GetID())
+			delete(e.pausedSeqs, workflow.GetID())
+			delete(e.pausedMemory, workflow.GetID())
 		}
 		e.runMu.Unlock()
 		activated <- activationErr

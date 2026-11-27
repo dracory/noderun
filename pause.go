@@ -18,7 +18,8 @@ func (e *WorkflowEngine) PauseWorkflow(workflowID string) error {
 	pauseMu := e.pauseLock(workflowID)
 	pauseMu.Lock()
 	e.runMu.Lock()
-	workflow, running := e.flows[workflowID]
+	workflow := e.flows[workflowID]
+	_, running := e.running[workflowID]
 	if !running {
 		e.runMu.Unlock()
 		pauseMu.Unlock()
@@ -46,7 +47,8 @@ func (e *WorkflowEngine) ResumeWorkflow(workflowID string) error {
 	pauseMu := e.pauseLock(workflowID)
 	pauseMu.Lock()
 	e.runMu.Lock()
-	workflow, running := e.flows[workflowID]
+	workflow := e.flows[workflowID]
+	_, running := e.running[workflowID]
 	if !running {
 		e.runMu.Unlock()
 		pauseMu.Unlock()
