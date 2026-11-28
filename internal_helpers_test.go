@@ -10,9 +10,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"github.com/dracory/nodebase"
-	nodestore "github.com/dracory/nodestore"
 )
 
 // waitForStatus polls the workflow snapshot until the node reaches the
@@ -97,32 +94,32 @@ func triggerWorkflow(id string, path string) *Workflow {
 	}
 }
 
-func injectInto(t *testing.T, engine *Engine, workflowID, data string) {
-	t.Helper()
-	msgID, _, err := engine.InjectMessage(workflowID, "inj", nodestore.NewMessage().SetPayload(data))
-	if err != nil {
-		t.Fatalf("inject failed: %v", err)
-	}
-	engine.DiscardPending(msgID)
-}
+// func injectInto(t *testing.T, engine *Engine, workflowID, data string) {
+// 	t.Helper()
+// 	msgID, _, err := engine.InjectMessage(workflowID, "inj", nodestore.NewMessage().SetPayload(data))
+// 	if err != nil {
+// 		t.Fatalf("inject failed: %v", err)
+// 	}
+// 	engine.DiscardPending(msgID)
+// }
 
 // waitForQueueCount polls the live queue until it reports n items or
 // the deadline passes.
-func waitForQueueCount(t *testing.T, engine *Engine, workflowID string, n int, timeout time.Duration) nodebase.QueueInspector {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	var q nodebase.QueueInspector
-	for time.Now().Before(deadline) {
-		if h, ok := engine.QueueHandle(workflowID, "f"); ok {
-			q = h
-			if q.Count() == n {
-				return q
-			}
-		}
-		time.Sleep(15 * time.Millisecond)
-	}
-	return q
-}
+// func waitForQueueCount(t *testing.T, engine *Engine, workflowID string, n int, timeout time.Duration) nodebase.QueueInspector {
+// 	t.Helper()
+// 	deadline := time.Now().Add(timeout)
+// 	var q nodebase.QueueInspector
+// 	for time.Now().Before(deadline) {
+// 		if h, ok := engine.QueueHandle(workflowID, "f"); ok {
+// 			q = h
+// 			if q.Count() == n {
+// 				return q
+// 			}
+// 		}
+// 		time.Sleep(15 * time.Millisecond)
+// 	}
+// 	return q
+// }
 
 // freeTCPPort grabs an ephemeral port by opening and closing a listener.
 func freeTCPPort(t *testing.T) int {
