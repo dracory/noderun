@@ -301,7 +301,7 @@ func (q *Queue) drainLoop(ctx context.Context) {
 // drainOne emits the oldest queued entry if draining is allowed.
 // Returns false when the queue is empty, held or stopped — the loop
 // then waits for the next signal.
-func (q *Queue) drainOne(ctx context.Context) bool {
+func (q *Queue) drainOne(_ context.Context) bool {
 	// The workflow pause gate closes before the queue pops an entry:
 	// staged rows remain queue-owned instead of being moved downstream
 	// merely because the drainer happened to poll while paused.

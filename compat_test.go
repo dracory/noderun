@@ -314,19 +314,19 @@ func asStoreWorkflow(w interface{}) nodestore.WorkflowInterface {
 	switch v := w.(type) {
 	case nil:
 		return nil
-	case nodestore.WorkflowInterface:
-		return v
 	case *Workflow:
 		return v.toStore()
 	case Workflow:
 		return (&v).toStore()
+	case nodestore.WorkflowInterface:
+		return v
 	default:
 		panic("compat_test: unsupported workflow type")
 	}
 }
 
 // asStoreMessage accepts *Message, nodestore.MessageInterface or nil.
-func asStoreMessage(m interface{}) nodestore.MessageInterface {
+func asStoreMessage(m any) nodestore.MessageInterface {
 	switch v := m.(type) {
 	case nil:
 		return nil
