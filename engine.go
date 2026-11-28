@@ -676,7 +676,7 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 			seen[node.GetType()] = true
 			if _, ok := e.nodeFactoryFor(node.GetType()); !ok {
 				missing = append(missing, node.GetType())
-				e.setNodeStatus(workflow.GetID(), node.GetID(), "error")
+				e.setNodeStatus(workflow.GetID(), node.GetID(), nodestore.NodeStatusError)
 			}
 		}
 		if len(missing) > 0 {
@@ -701,14 +701,14 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 		}
 		executor, err := e.executorForNode(workflow.GetID(), node)
 		if err != nil {
-			e.setNodeStatus(workflow.GetID(), node.GetID(), "error")
+			e.setNodeStatus(workflow.GetID(), node.GetID(), nodestore.NodeStatusError)
 			e.EmitEvent(workflow.GetID(), node.GetID(), nodebase.NodeName(node), "error", err.Error())
 			e.EmitEvent(workflow.GetID(), "", "", "error", "workflow deploy failed")
 			activationErr = err
 			return
 		}
 		if verr := executor.Validate(); verr != nil {
-			e.setNodeStatus(workflow.GetID(), node.GetID(), "error")
+			e.setNodeStatus(workflow.GetID(), node.GetID(), nodestore.NodeStatusError)
 			e.EmitEvent(workflow.GetID(), node.GetID(), nodebase.NodeName(node), "error", verr.Error())
 			e.EmitEvent(workflow.GetID(), "", "", "error", "workflow deploy failed")
 			activationErr = verr
@@ -739,7 +739,7 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 
 		// Activation is lifecycle work, not a message run — emit a
 		// single "activated" event instead of started/completed noise.
-		e.setNodeStatus(workflow.GetID(), node.GetID(), "running")
+		e.setNodeStatus(workflow.GetID(), node.GetID(), nodestore.NodeStatusRunning)
 		// Supersede check and stopper registration under the same lock:
 		// a redeploy may already have replaced this run, in which case
 		// its listener must not end up in the new run's stopper list.
@@ -765,7 +765,7 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 			_, execErr = safeExecuteNode(executor, ctx, payload)
 		}
 		if execErr != nil {
-			e.setNodeStatus(workflow.GetID(), node.GetID(), "error")
+			e.setNodeStatus(workflow.GetID(), node.GetID(), nodestore.NodeStatusError)
 			e.EmitEvent(workflow.GetID(), node.GetID(), nodebase.NodeName(node), "error", execErr.Error())
 			e.EmitEvent(workflow.GetID(), "", "", "error", "workflow deploy failed")
 			activationErr = execErr
@@ -783,7 +783,7 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 			activationErr = errSuperseded
 			return
 		}
-		e.setNodeStatus(workflow.GetID(), node.GetID(), "ok")
+		e.setNodeStatus(workflow.GetID(), node.GetID(), nodestore.NodeStatusOK)
 		e.EmitEvent(workflow.GetID(), node.GetID(), nodebase.NodeName(node), "info", "activated")
 	}
 
@@ -848,8 +848,8 @@ func (e *WorkflowEngine) abandonRun(workflowID string, ctx context.Context, gen 
 // the node's output payload (unchanged input for pass-through nodes).
 func (e *WorkflowEngine) runNode(ctx context.Context, workflowID string, node nodestore.NodeInterface, executor nodebase.NodeExecutor, payload nodestore.MessageInterface) (nodestore.MessageInterface, error) {
 	name := nodebase.NodeName(node)
-	e.setNodeStatus(workflowID, node.GetID(), "running")
-	e.notifyStatus(workflowID, node, "running", payload)
+	e.setNodeStatus(workflowID, node.GetID(), nodestore.NodeStatusRunning)
+	e.notifyStatus(workflowID, node, nodestore.NodeStatusRunning, payload)
 
 	// Track long-lived resources (e.g. an HTTP trigger listener) so
 	// they can be shut down on stop/restart — they outlive this run
@@ -866,16 +866,16 @@ func (e *WorkflowEngine) runNode(ctx context.Context, workflowID string, node no
 	dur := time.Since(start)
 	if err != nil {
 		e.recordRun(workflowID, node, payload, nil, dur, err)
-		e.setNodeStatus(workflowID, node.GetID(), "error")
-		e.notifyStatus(workflowID, node, "error", payload)
+		e.setNodeStatus(workflowID, node.GetID(), nodestore.NodeStatusError)
+		e.notifyStatus(workflowID, node, nodestore.NodeStatusError, payload)
 		e.EmitEvent(workflowID, node.GetID(), name, "error", err.Error())
 		return nil, err
 	}
 
 	e.recordRun(workflowID, node, payload, out, dur, nil)
 
-	e.setNodeStatus(workflowID, node.GetID(), "ok")
-	e.notifyStatus(workflowID, node, "ok", payload)
+	e.setNodeStatus(workflowID, node.GetID(), nodestore.NodeStatusOK)
+	e.notifyStatus(workflowID, node, nodestore.NodeStatusOK, payload)
 
 	// Executors may emit extra events after a successful run — debug
 	// and log nodes feed the editor's debug panel this way, without
@@ -1524,7 +1524,7 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 		}
 		executor, err := e.executorForNode(workflowID, node)
 		if err != nil {
-			e.setNodeStatus(workflowID, node.GetID(), "error")
+			e.setNodeStatus(workflowID, node.GetID(), nodestore.NodeStatusError)
 			e.EmitEvent(workflowID, node.GetID(), nodebase.NodeName(node), "error", err.Error())
 			e.RouteFailure(workflowID, node, item.Payload, err)
 			return false // abort this branch only
