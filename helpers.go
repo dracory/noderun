@@ -11,16 +11,6 @@ import (
 // interface-first domain model has no struct literals, so a few
 // mechanical conversions need small glue functions.
 
-// messageWithError sets a *string error on a message built via the
-// fluent nodestore.NewMessage() chain (used where flowrunner had a Message{...}
-// literal with an Error field).
-func messageWithError(m nodestore.MessageInterface, err *string) nodestore.MessageInterface {
-	if err != nil {
-		m.SetError(*err)
-	}
-	return m
-}
-
 // cloneWorkflow shallow-copies a workflow so the deploy-time component
 // expansion can rewrite its node/edge lists without writing the
 // expanded graph back into the caller's stored definition (flowrunner

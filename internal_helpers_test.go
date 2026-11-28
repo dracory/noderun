@@ -7,7 +7,6 @@ package noderunner
 // symbols.
 
 import (
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -81,17 +80,6 @@ func waitForDebugValues(engine *Engine, workflowID string, n int, timeout time.D
 	return debugValues(engine, workflowID)
 }
 
-func debugValuesFor(engine *Engine, workflowID, nodeID string) []string {
-	_, _, events, _ := engine.GetWorkflowSnapshot(workflowID, 0)
-	var out []string
-	for _, ev := range events {
-		if ev.NodeID == nodeID && ev.Level == "debug" {
-			out = append(out, ev.Message)
-		}
-	}
-	return out
-}
-
 // triggerWorkflow builds httpTrigger -> httpResponse on a random port.
 func triggerWorkflow(id string, path string) *Workflow {
 	return &Workflow{
@@ -126,51 +114,6 @@ func waitForQueueCount(t *testing.T, engine *Engine, workflowID string, n int, t
 	var q nodebase.QueueInspector
 	for time.Now().Before(deadline) {
 		if h, ok := engine.QueueHandle(workflowID, "f"); ok {
-			q = h
-			if q.Count() == n {
-				return q
-			}
-		}
-		time.Sleep(15 * time.Millisecond)
-	}
-	return q
-}
-
-// injectSequentially injects payloads one at a time, waiting for each
-// to appear in the queue before sending the next.
-func injectSequentially(t *testing.T, engine *Engine, workflowID string, capacity int, payloads ...string) {
-	t.Helper()
-	for i, data := range payloads {
-		injectInto(t, engine, workflowID, data)
-		want := i + 1
-		if capacity > 0 && want > capacity {
-			want = capacity
-		}
-		deadline := time.Now().Add(3 * time.Second)
-		for {
-			q := waitForQueueCount(t, engine, workflowID, want, 3*time.Second)
-			if q == nil {
-				t.Fatalf("queue never appeared waiting for %q", data)
-			}
-			items := q.Items()
-			if len(items) == want && fmt.Sprint(items[len(items)-1].Payload.GetPayload()) == data {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatalf("queue never staged %q: items=%v", data, items)
-			}
-			time.Sleep(15 * time.Millisecond)
-		}
-	}
-}
-
-// waitForCheckpointCount polls the checkpoint node's queue handle.
-func waitForCheckpointCount(t *testing.T, engine *Engine, workflowID string, n int, timeout time.Duration) nodebase.QueueInspector {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	var q nodebase.QueueInspector
-	for time.Now().Before(deadline) {
-		if h, ok := engine.QueueHandle(workflowID, "cp"); ok {
 			q = h
 			if q.Count() == n {
 				return q

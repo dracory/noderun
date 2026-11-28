@@ -339,24 +339,6 @@ func asStoreMessage(m any) nodestore.MessageInterface {
 	}
 }
 
-// shimMsg re-boxes a nodestore message as the shim *Message (a no-op
-// when it already is one).
-func shimMsg(m nodestore.MessageInterface) *Message {
-	if m == nil {
-		return nil
-	}
-	if sm, ok := m.(*Message); ok {
-		return sm
-	}
-	return &Message{
-		ID:        m.GetID(),
-		Payload:   m.GetPayload(),
-		Metadata:  m.GetMetadata(),
-		Error:     m.GetError(),
-		Timestamp: m.GetTimestamp(),
-	}
-}
-
 // == ENGINE SHIM =============================================================
 
 // Engine wraps *WorkflowEngine, re-exposing the

@@ -6,24 +6,29 @@ import (
 )
 
 // Child flow identity helpers (ported from the legacy runner).
-// flowLabel and flowRefMatches live in the child flow exchange layer.
 
-// flowEntityDisabled reports whether the view.childFlows entity matching
-// ref (by id or label) is flagged enabled:false.
-func flowEntityDisabled(w nodestore.WorkflowInterface, ref string) bool {
+func flowLabel(w nodestore.WorkflowInterface, ref string) string {
 	if w == nil || w.GetView() == nil || ref == "" {
-		return false
+		return ref
 	}
 	for _, m := range arrayOf(w.GetView()["childFlows"]) {
-		mm, ok := m.(map[string]interface{})
+		mm, ok := m.(map[string]any)
 		if !ok {
 			continue
 		}
-		if enabled, isBool := mm["enabled"].(bool); isBool && !enabled {
-			if nodebase.StringOf(mm["id"]) == ref || nodebase.StringOf(mm["label"]) == ref {
-				return true
+		if nodebase.StringOf(mm["id"]) == ref {
+			if label := nodebase.StringOf(mm["label"]); label != "" {
+				return label
 			}
 		}
 	}
-	return false
+	return ref
+}
+
+func flowRefMatches(w nodestore.WorkflowInterface, a, b any) bool {
+	ra, rb := nodebase.StringOf(a), nodebase.StringOf(b)
+	if ra == "" || rb == "" {
+		return false
+	}
+	return ra == rb || flowLabel(w, ra) == flowLabel(w, rb)
 }
