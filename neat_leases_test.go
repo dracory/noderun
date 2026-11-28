@@ -25,7 +25,7 @@ func neatLeaseTestStore(t *testing.T) *NeatLeaseStore {
 	if err != nil {
 		t.Fatalf("NewNeatLeaseStore: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return store
 }
 

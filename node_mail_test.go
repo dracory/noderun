@@ -73,7 +73,7 @@ func (s *fakeSMTPSink) handle(conn net.Conn) {
 	w := bufio.NewWriter(conn)
 	r := bufio.NewReader(conn)
 	reply := func(format string, args ...interface{}) {
-		fmt.Fprintf(w, format+"\r\n", args...)
+		_, _ = fmt.Fprintf(w, format+"\r\n", args...)
 		_ = w.Flush()
 	}
 	reply("220 fake-smtp ESMTP")

@@ -34,7 +34,7 @@ func neatInboxTestStore(t *testing.T) *NeatInboxStore {
 	if err != nil {
 		t.Fatalf("NewNeatInboxStore: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return store
 }
 

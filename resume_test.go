@@ -40,7 +40,7 @@ func resumeTestStore(t *testing.T) *nodestore.Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return store
 }
 

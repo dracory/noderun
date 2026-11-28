@@ -34,7 +34,7 @@ func neatCoordinationTestStore(t *testing.T, memory bool) (*NeatCoordinationStor
 		_ = db.Close()
 		t.Fatalf("NewNeatCoordinationStore: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return store, db
 }
 

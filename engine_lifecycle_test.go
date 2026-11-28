@@ -273,7 +273,7 @@ func TestStopWorkflowDoesNotBlockRunMu(t *testing.T) {
 	go func() {
 		defer close(respDone)
 		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/hold", port))
-		if err == nil {
+		if err == nil && resp != nil {
 			_ = resp.Body.Close()
 		}
 	}()
