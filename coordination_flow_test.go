@@ -193,7 +193,7 @@ func openCoordinationTestDB(t *testing.T, path string) (*sql.DB, *NeatCoordinati
 	}
 	store, err := NewNeatCoordinationStore(db)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("NewNeatCoordinationStore: %v", err)
 	}
 	return db, store
@@ -229,7 +229,7 @@ func TestWaitNotifyRestartPreservesWaiterAndSignalCount(t *testing.T) {
 	}
 
 	db2, store2 := openCoordinationTestDB(t, dbPath)
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 	engine2 := NewWorkflowEngine()
 	configureCoordinationEngine(t, engine2, db2, store2)
 	if _, err := engine2.DeployWorkflow(ctx, workflow, nil); err != nil {
@@ -248,9 +248,9 @@ func TestWaitNotifyTwoEnginesShareSQLStore(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "shared-coordination.db")
 
 	dbA, storeA := openCoordinationTestDB(t, dbPath)
-	defer dbA.Close()
+	defer func() { _ = dbA.Close() }()
 	dbB, storeB := openCoordinationTestDB(t, dbPath)
-	defer dbB.Close()
+	defer func() { _ = dbB.Close() }()
 
 	waitWorkflow := coordinationWaitOnlyFlow("wf-wait-shared")
 	engineA := NewWorkflowEngine()

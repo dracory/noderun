@@ -120,7 +120,7 @@ func freeTCPPort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("cannot reserve port: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port
 }
 
@@ -157,7 +157,7 @@ func TestTCPInReceives(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client dial failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if _, err := conn.Write([]byte("hello tcp\n")); err != nil {
 		t.Fatalf("client write failed: %v", err)
 	}
@@ -224,6 +224,6 @@ func freeUDPPort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("cannot reserve udp port: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	return conn.LocalAddr().(*net.UDPAddr).Port
 }

@@ -180,7 +180,7 @@ func echoServer(t *testing.T, fn func(net.Conn)) int {
 // becomes the message payload and remote ip/port land in metadata.
 func TestTCPRequestReply(t *testing.T) {
 	port := echoServer(t, func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		r := bufio.NewReader(conn)
 		line, _ := r.ReadString('\n')
 		_, _ = conn.Write([]byte("echo:" + line))
@@ -204,7 +204,7 @@ func TestTCPRequestReply(t *testing.T) {
 // including the delimiter.
 func TestTCPRequestDelimiter(t *testing.T) {
 	port := echoServer(t, func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		r := bufio.NewReader(conn)
 		_, _ = r.ReadString('\n')
 		_, _ = conn.Write([]byte("part1|part2|trailing"))
@@ -226,7 +226,7 @@ func TestTCPRequestDelimiter(t *testing.T) {
 // the server sent before closing.
 func TestTCPRequestTimeoutMode(t *testing.T) {
 	port := echoServer(t, func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		r := bufio.NewReader(conn)
 		_, _ = r.ReadString('\n')
 		_, _ = conn.Write([]byte("done"))
@@ -400,7 +400,7 @@ func testCertFiles(t *testing.T) (cert, key, ca string) {
 		if err != nil {
 			t.Fatalf("write %s failed: %v", path, err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		if err := pem.Encode(f, &pem.Block{Type: typ, Bytes: der}); err != nil {
 			t.Fatalf("pem encode failed: %v", err)
 		}
@@ -445,7 +445,7 @@ func TestTCPRequestOverTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tls listen failed: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	port := l.Addr().(*net.TCPAddr).Port
 	go func() {
 		for {
@@ -454,7 +454,7 @@ func TestTCPRequestOverTLS(t *testing.T) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
+				defer func() { _ = c.Close() }()
 				r := bufio.NewReader(c)
 				_, _ = r.ReadString('\n')
 				_, _ = c.Write([]byte("secure\n"))

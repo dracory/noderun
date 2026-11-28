@@ -58,7 +58,8 @@ func TestHTTPTriggerBodyLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d", resp.StatusCode)
 	}
@@ -111,7 +112,8 @@ func TestHTTPTriggerRouteParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -153,7 +155,7 @@ func TestHTTPTriggerConcurrentStop(t *testing.T) {
 		if err != nil {
 			return // listener released
 		}
-		c.Close()
+		_ = c.Close()
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("listener still accepting after Stop")
@@ -200,7 +202,10 @@ func TestHTTPTriggerInvalidPathDoesNotDeadlock(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- n.Stop() }()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Stop returned error: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Stop() blocked — serverMu leaked")
 	}
@@ -323,7 +328,8 @@ func TestHTTPTriggerMainListenerServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -333,7 +339,8 @@ func TestHTTPTriggerMainListenerServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", resp.StatusCode)
 	}
@@ -367,7 +374,8 @@ func TestHTTPTriggerMainListenerRouteParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d (%s)", resp.StatusCode, body)
@@ -418,7 +426,8 @@ func TestHTTPTriggerMainListenerConflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("first trigger lost its route: %d", resp.StatusCode)
 	}
@@ -444,7 +453,8 @@ func TestHTTPTriggerMainListenerUnregister(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404 after stop, got %d", resp.StatusCode)
 	}
@@ -481,7 +491,8 @@ func TestHTTPTriggerMainListenerPartialDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("unchanged trigger lost its route on partial redeploy: %d", resp.StatusCode)
 	}
@@ -501,7 +512,8 @@ func TestHTTPTriggerMainListenerPartialDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("old route still served after remount: %d", resp.StatusCode)
 	}
@@ -509,7 +521,8 @@ func TestHTTPTriggerMainListenerPartialDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("new route not serving after remount: %d", resp.StatusCode)
 	}

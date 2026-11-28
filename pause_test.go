@@ -75,7 +75,7 @@ func TestPauseResumeInvalidTransitions(t *testing.T) {
 	if _, err := engine.ExecuteWorkflow(ctx, pauseTestFlow(workflowID), nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
-	defer engine.StopWorkflow(workflowID)
+	defer func() { _ = engine.StopWorkflow(workflowID) }()
 
 	if err := engine.PauseWorkflow(workflowID); err != nil {
 		t.Fatalf("pause failed: %v", err)
@@ -111,7 +111,7 @@ func TestPauseQueuesMemoryBacklogAndResumeDrainsIt(t *testing.T) {
 	if _, err := engine.ExecuteWorkflow(ctx, pauseTestFlow(workflowID), nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
-	defer engine.StopWorkflow(workflowID)
+	defer func() { _ = engine.StopWorkflow(workflowID) }()
 	if err := engine.PauseWorkflow(workflowID); err != nil {
 		t.Fatalf("pause failed: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestPausePersistsDurableBacklogAndResumeAcksIt(t *testing.T) {
 	if _, err := engine.ExecuteWorkflow(ctx, pauseTestFlow(workflowID), nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
-	defer engine.StopWorkflow(workflowID)
+	defer func() { _ = engine.StopWorkflow(workflowID) }()
 	if err := engine.PauseWorkflow(workflowID); err != nil {
 		t.Fatalf("pause failed: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestPauseAllowsInFlightTraversalToComplete(t *testing.T) {
 	if _, err := engine.ExecuteWorkflow(ctx, flow, nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
-	defer engine.StopWorkflow(workflowID)
+	defer func() { _ = engine.StopWorkflow(workflowID) }()
 
 	pauseInject(t, engine, workflowID, "in-flight")
 	select {
@@ -260,7 +260,7 @@ func TestPauseStagesQueueInputsWithoutDrainingThem(t *testing.T) {
 	if _, err := engine.ExecuteWorkflow(ctx, flow, nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
-	defer engine.StopWorkflow(workflowID)
+	defer func() { _ = engine.StopWorkflow(workflowID) }()
 	if err := engine.PauseWorkflow(workflowID); err != nil {
 		t.Fatalf("pause failed: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestDeployingUnpausedWorkflowDrainsPausedMemoryBacklog(t *testing.T) {
 	if _, err := engine.ExecuteWorkflow(ctx, flow, nil); err != nil {
 		t.Fatalf("deploy failed: %v", err)
 	}
-	defer engine.StopWorkflow(workflowID)
+	defer func() { _ = engine.StopWorkflow(workflowID) }()
 	if err := engine.PauseWorkflow(workflowID); err != nil {
 		t.Fatalf("pause failed: %v", err)
 	}

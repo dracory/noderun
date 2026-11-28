@@ -126,7 +126,7 @@ func TestStopperKeepsWorkflowRunning(t *testing.T) {
 
 	// The port must actually be held while running
 	if l, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err == nil {
-		l.Close()
+		_ = l.Close()
 		t.Fatalf("port %d was not bound by the trigger listener", port)
 	}
 
@@ -143,7 +143,7 @@ func TestStopperKeepsWorkflowRunning(t *testing.T) {
 	for time.Now().Before(deadline) {
 		l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
-			l.Close()
+			_ = l.Close()
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -274,7 +274,7 @@ func TestStopWorkflowDoesNotBlockRunMu(t *testing.T) {
 		defer close(respDone)
 		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/hold", port))
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	}()
 	time.Sleep(150 * time.Millisecond) // let the request reach the handler

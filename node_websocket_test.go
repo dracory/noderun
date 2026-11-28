@@ -46,7 +46,7 @@ func TestWebSocketInReceives(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ws dial failed: %v", err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
 	if err := conn.Write(ctx, websocket.MessageText, []byte("hello ws")); err != nil {
 		t.Fatalf("ws write failed: %v", err)
@@ -96,7 +96,7 @@ func TestWebSocketOutBroadcast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ws dial failed: %v", err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
 	// Wait until the session is registered, then inject a message
 	deadline := time.Now().Add(2 * time.Second)

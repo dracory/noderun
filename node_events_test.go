@@ -86,10 +86,8 @@ func TestCatchNode(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err != nil {
-		t.Fatalf("trigger listener never came up: %v", err)
-	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

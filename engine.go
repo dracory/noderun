@@ -1355,7 +1355,7 @@ func (e *WorkflowEngine) executeDownstream(ctx context.Context, workflowID, from
 			if allowed != nil && !allowed[edgePort(edge)] {
 				continue
 			}
-			offer(edge.GetTarget(), nodebase.ClonePayload(payload))
+			_ = offer(edge.GetTarget(), nodebase.ClonePayload(payload))
 		}
 	}, report)
 }
@@ -1531,7 +1531,7 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 		// the node does nothing (Node-RED "d" semantics).
 		if nodeDisabled(workflow, node) {
 			for _, edge := range outEdges[node.GetID()] {
-				offer(edge.GetTarget(), nodebase.ClonePayload(item.Payload))
+				_ = offer(edge.GetTarget(), nodebase.ClonePayload(item.Payload))
 			}
 			return false
 		}
@@ -1594,7 +1594,7 @@ func (e *WorkflowEngine) traverse(ctx context.Context, workflowID string, workfl
 				continue
 			}
 			for _, o := range outs {
-				offer(edge.GetTarget(), nodebase.ClonePayload(o))
+				_ = offer(edge.GetTarget(), nodebase.ClonePayload(o))
 			}
 		}
 		return false

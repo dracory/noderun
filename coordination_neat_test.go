@@ -31,7 +31,7 @@ func neatCoordinationTestStore(t *testing.T, memory bool) (*NeatCoordinationStor
 	}
 	store, err := NewNeatCoordinationStore(db)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("NewNeatCoordinationStore: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
@@ -415,7 +415,7 @@ func TestNeatCoordinationStoreConcurrentConstructors(t *testing.T) {
 				errs <- err
 				return
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			store, err := NewNeatCoordinationStore(db)
 			if err != nil {
 				errs <- err
@@ -438,7 +438,7 @@ func TestNeatCoordinationStoreConcurrentConstructors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	store, err := NewNeatCoordinationStore(db)
 	if err != nil {
 		t.Fatal(err)
@@ -454,7 +454,7 @@ func TestNeatCoordinationStoreMigratesLegacyNullClaimColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec("CREATE TABLE node_coordination_signals (signal_key TEXT PRIMARY KEY, signal_count INTEGER, cached_metadata TEXT, expires_at TEXT, updated_at TEXT)")
 	if err != nil {

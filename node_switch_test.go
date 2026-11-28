@@ -94,7 +94,7 @@ func TestSwitchRouting(t *testing.T) {
 		if err != nil {
 			t.Fatalf("trigger listener never came up: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("GET %s: expected 200, got %d", path, resp.StatusCode)
 		}

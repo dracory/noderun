@@ -102,7 +102,8 @@ func TestSubmitMultipartEmits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -167,7 +168,8 @@ func TestSubmitRawBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -215,7 +217,8 @@ func TestSubmitAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
@@ -238,7 +241,8 @@ func TestSubmitAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -270,7 +274,8 @@ func TestSubmitOversize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d", resp.StatusCode)
 	}
@@ -296,7 +301,8 @@ func TestSubmitOversizeRaw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d", resp.StatusCode)
 	}
@@ -345,7 +351,8 @@ func TestSubmitMainListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200 receipt, got %d", resp.StatusCode)
 	}
@@ -356,7 +363,8 @@ func TestSubmitMainListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	resp = requireHTTPResponse(t, resp, err)
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", resp.StatusCode)
 	}

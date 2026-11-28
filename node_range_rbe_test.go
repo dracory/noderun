@@ -158,8 +158,8 @@ func TestRBEReset(t *testing.T) {
 	n := NewRBENode("n", &RBEConfig{Func: "rbe"}, engine, "wf")
 	ctx := context.Background()
 
-	n.Execute(ctx, rangePayload(float64(1))) // passes, stores 1
-	n.Execute(ctx, rangePayload(float64(2))) // passes, stores 2
+	_, _ = n.Execute(ctx, rangePayload(float64(1))) // passes, stores 1
+	_, _ = n.Execute(ctx, rangePayload(float64(2))) // passes, stores 2
 
 	// reset clears prev — next message is "first" again → passed (rbe
 	// sends on any change, including the initial value)

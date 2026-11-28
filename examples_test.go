@@ -252,7 +252,10 @@ func fetchExampleFiles(dir string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	if resp == nil {
+		return fmt.Errorf("HTTP request returned a nil response")
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("GET %s: %s", treeURL, resp.Status)
 	}
@@ -301,7 +304,10 @@ func httpGet(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	if resp == nil {
+		return nil, fmt.Errorf("HTTP request returned a nil response")
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}

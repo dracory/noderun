@@ -82,7 +82,7 @@ func TestHTTPTriggerFlow(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	resp = requireHTTPResponse(t, resp, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -146,7 +146,7 @@ func TestHTTPResponseStatusAndHeaders(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	resp = requireHTTPResponse(t, resp, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// nodestore.MessageInterface-level statusCode must override the node's config (201)
 	if resp.StatusCode != http.StatusTeapot {
@@ -202,7 +202,7 @@ func TestHTTPResponseConfigFallback(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	resp = requireHTTPResponse(t, resp, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("expected 202 from config statusCode, got %d", resp.StatusCode)

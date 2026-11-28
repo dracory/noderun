@@ -69,7 +69,7 @@ func (s *fakeSMTPSink) serve() {
 }
 
 func (s *fakeSMTPSink) handle(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	w := bufio.NewWriter(conn)
 	r := bufio.NewReader(conn)
 	reply := func(format string, args ...interface{}) {
