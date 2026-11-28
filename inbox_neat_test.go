@@ -132,6 +132,9 @@ func TestBinaryPayloadDurableRoundTripFileOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("entitystore message find: %v", err)
 	}
+	if persisted == nil {
+		t.Fatal("entitystore message find returned a nil message")
+	}
 	if payload, ok := persisted.GetPayload().([]byte); !ok || !bytes.Equal(payload, original) {
 		t.Fatalf("entitystore recovered %T %#v", persisted.GetPayload(), persisted.GetPayload())
 	}

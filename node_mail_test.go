@@ -238,13 +238,25 @@ func TestMailConfigAndRegistration(t *testing.T) {
 	}
 
 	// Validation failures
-	badIn, _ := engine.executorForNode("wf", &Node{ID: "mi2", Type: "mailIn", Data: map[string]interface{}{}})
+	badIn, err := engine.executorForNode("wf", &Node{ID: "mi2", Type: "mailIn", Data: map[string]interface{}{}})
+	if err != nil {
+		t.Fatalf("bad mailIn executorForNode failed: %v", err)
+	}
+	if badIn == nil {
+		t.Fatal("bad mailIn executor is nil")
+	}
 	if verr := badIn.Validate(); verr == nil {
 		t.Fatal("mailIn without host must fail validation")
 	}
-	badOut, _ := engine.executorForNode("wf", &Node{ID: "mo2", Type: "mailOut", Data: map[string]interface{}{
+	badOut, err := engine.executorForNode("wf", &Node{ID: "mo2", Type: "mailOut", Data: map[string]interface{}{
 		"host": "h", "security": "bogus",
 	}})
+	if err != nil {
+		t.Fatalf("bad mailOut executorForNode failed: %v", err)
+	}
+	if badOut == nil {
+		t.Fatal("bad mailOut executor is nil")
+	}
 	if verr := badOut.Validate(); verr == nil {
 		t.Fatal("mailOut with invalid security must fail validation")
 	}

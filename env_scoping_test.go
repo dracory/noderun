@@ -69,6 +69,10 @@ func TestEnvScopingChain(t *testing.T) {
 	// under runMu to stay race-free against the running traversal.
 	engine.runMu.Lock()
 	running := engine.flows[workflow.ID]
+	if running == nil {
+		engine.runMu.Unlock()
+		t.Fatal("running workflow missing")
+	}
 	running.GetView()["groups"] = []interface{}{}
 	engine.runMu.Unlock()
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "component" {
@@ -77,7 +81,12 @@ func TestEnvScopingChain(t *testing.T) {
 
 	// Without the overlay the flow env applies.
 	engine.runMu.Lock()
-	delete(running.FindNodeByID("fn").GetData(), componentEnvKey)
+	fnNode := running.FindNodeByID("fn")
+	if fnNode == nil {
+		engine.runMu.Unlock()
+		t.Fatal("function node missing from running workflow")
+	}
+	delete(fnNode.GetData(), componentEnvKey)
 	engine.runMu.Unlock()
 	if v, ok := engine.NodeEnv(workflow.ID, "fn", "NODERUN_ENV_SCOPED"); !ok || v != "flow" {
 		t.Fatalf("expected flow env to win, got %#v (ok=%v)", v, ok)

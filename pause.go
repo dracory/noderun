@@ -30,6 +30,11 @@ func (e *WorkflowEngine) PauseWorkflow(workflowID string) error {
 		pauseMu.Unlock()
 		return fmt.Errorf("cannot pause workflow %q: workflow is already paused", workflowID)
 	}
+	if workflow == nil {
+		e.runMu.Unlock()
+		pauseMu.Unlock()
+		return fmt.Errorf("cannot pause workflow %q: running workflow state unavailable", workflowID)
+	}
 	e.paused[workflowID] = true
 	workflow.SetPaused(true)
 	e.runMu.Unlock()
@@ -58,6 +63,11 @@ func (e *WorkflowEngine) ResumeWorkflow(workflowID string) error {
 		e.runMu.Unlock()
 		pauseMu.Unlock()
 		return fmt.Errorf("cannot resume workflow %q: workflow is not paused", workflowID)
+	}
+	if workflow == nil {
+		e.runMu.Unlock()
+		pauseMu.Unlock()
+		return fmt.Errorf("cannot resume workflow %q: running workflow state unavailable", workflowID)
 	}
 
 	workflow.SetPaused(false)

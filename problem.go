@@ -95,6 +95,10 @@ func (e *WorkflowEngine) problemQueueID(workflowID string) (string, bool) {
 //     marked fromCatch, whose catch branch failure is itself
 //     uncaught.
 func (e *WorkflowEngine) RouteFailure(workflowID string, node nodestore.NodeInterface, in nodestore.MessageInterface, cause error) {
+	if node == nil {
+		e.EmitEvent(workflowID, "", "", "error", fmt.Sprintf("failure routing skipped: missing node (%v)", cause))
+		return
+	}
 	if e.dispatchErrorPort(workflowID, node, in, cause) {
 		return
 	}
@@ -216,11 +220,11 @@ func (e *WorkflowEngine) dispatchProblem(workflowID string, node nodestore.NodeI
 		return // failure downstream of a problem-queue drain: no loop
 	}
 	q, ok := e.QueueHandle(workflowID, pid)
-	if !ok && pid == ProblemQueueAutoNodeID {
+	if (!ok || q == nil) && pid == ProblemQueueAutoNodeID {
 		q = e.autoProblemQueue(workflowID)
 		ok = q != nil
 	}
-	if !ok {
+	if !ok || q == nil {
 		e.EmitEvent(workflowID, node.GetID(), nodebase.NodeName(node), "error",
 			fmt.Sprintf("uncaught failure dropped: problem queue %q not available", pid))
 		return

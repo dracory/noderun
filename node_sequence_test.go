@@ -118,6 +118,7 @@ func TestSortMessagePayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	arr := out.GetPayload().([]interface{})
 	for i, want := range []float64{1, 2, 3} {
 		if arr[i] != want {
@@ -135,6 +136,7 @@ func TestSortMessageDescending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	arr := out.GetPayload().([]interface{})
 	for i, want := range []string{"c", "b", "a"} {
 		if arr[i] != want {
@@ -152,6 +154,7 @@ func TestSortMessageAsNum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	arr := out.GetPayload().([]interface{})
 	for i, want := range []string{"9", "10", "100"} {
 		if arr[i] != want {

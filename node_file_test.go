@@ -43,6 +43,9 @@ func TestFileNodeWriteReadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("file write failed: %v", err)
 	}
+	if out == nil {
+		t.Fatal("file write returned a nil message")
+	}
 	if out.GetMetadata()["filename"] != target {
 		t.Fatalf("expected filename metadata %q, got %v", target, out.GetMetadata()["filename"])
 	}
@@ -54,6 +57,9 @@ func TestFileNodeWriteReadRoundTrip(t *testing.T) {
 	read, err := reader.Execute(context.Background(), &Message{Metadata: map[string]interface{}{}})
 	if err != nil {
 		t.Fatalf("fileIn read failed: %v", err)
+	}
+	if read == nil {
+		t.Fatal("fileIn read returned a nil message")
 	}
 	if read.GetPayload() != "hello world" {
 		t.Fatalf("expected %q, got %v", "hello world", read.GetPayload())
@@ -108,6 +114,9 @@ func TestFileInLines(t *testing.T) {
 	out, err := exec.Execute(context.Background(), &Message{Metadata: map[string]interface{}{"keep": "x"}})
 	if err != nil {
 		t.Fatalf("fileIn failed: %v", err)
+	}
+	if out == nil {
+		t.Fatal("fileIn lines returned a nil message")
 	}
 	expander, ok := exec.(nodebase.MessageExpander)
 	if !ok {
@@ -207,6 +216,9 @@ func TestFileNodeFilenameFromMsg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
+	if out == nil {
+		t.Fatal("file write returned a nil message")
+	}
 	if out.GetMetadata()["filename"] != target {
 		t.Fatalf("expected %q, got %v", target, out.GetMetadata()["filename"])
 	}
@@ -234,6 +246,9 @@ func TestFileInSendError(t *testing.T) {
 	out, err := exec.Execute(context.Background(), &Message{Metadata: map[string]interface{}{}})
 	if err != nil {
 		t.Fatalf("sendError should not error, got %v", err)
+	}
+	if out == nil {
+		t.Fatal("fileIn sendError returned a nil message")
 	}
 	m, ok := out.GetPayload().(map[string]interface{})
 	if !ok || m["error"] == nil {
@@ -265,6 +280,9 @@ func TestFileInBinary(t *testing.T) {
 	out, err := exec.Execute(context.Background(), &Message{Metadata: map[string]interface{}{}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if out == nil {
+		t.Fatal("fileIn binary returned a nil message")
 	}
 	b, ok := out.GetPayload().([]byte)
 	if !ok || len(b) != 4 || b[3] != 255 {

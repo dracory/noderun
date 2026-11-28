@@ -34,6 +34,9 @@ func TestCompressOutputDurableRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("entitystore find: %v", err)
 	}
+	if recovered == nil {
+		t.Fatal("entitystore find returned a nil message")
+	}
 	if _, ok := recovered.GetPayload().([]byte); !ok {
 		t.Fatalf("recovered compressed payload is %T", recovered.GetPayload())
 	}

@@ -81,6 +81,11 @@ func getWithRetry(url string, timeout time.Duration) (string, error) {
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(url)
 		if err == nil {
+			if resp == nil {
+				lastErr = fmt.Errorf("empty HTTP response")
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
 			body, err := io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
 			return string(body), err

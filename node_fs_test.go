@@ -326,6 +326,9 @@ func TestFsOutLocalDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fsOut execute failed: %v", err)
 	}
+	if out == nil {
+		t.Fatal("fsOut returned a nil message")
+	}
 
 	target := filepath.Join(outDir, "result.txt")
 	if out.GetMetadata()["filename"] != target {
@@ -370,6 +373,9 @@ func TestFsOutMsgFilename(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
+	}
+	if out == nil {
+		t.Fatal("fsOut returned a nil message")
 	}
 	if _, err := os.Stat(filepath.Join(outDir, "evil.txt")); err != nil {
 		t.Fatalf("expected evil.txt in outDir: %v", err)

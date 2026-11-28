@@ -47,6 +47,7 @@ func TestExecNodeEcho(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	if s, _ := out.GetPayload().(string); strings.TrimSpace(s) != "hi" {
 		t.Fatalf("expected Data 'hi', got %q", out.GetPayload())
 	}
@@ -71,6 +72,7 @@ func TestExecNodeNonZeroExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	rc, _ := out.GetMetadata()["rc"].(map[string]interface{})
 	if rc["code"] != 3 {
 		t.Fatalf("expected rc {code:3}, got %v", out.GetMetadata()["rc"])

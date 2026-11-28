@@ -244,6 +244,9 @@ func expandComponentInstances(srcNodes []nodestore.NodeInterface, edges []nodest
 				outEdges = append(outEdges, nodestore.NewEdge(nodebase.GenerateID(), e.GetSource(), target).SetSourceKey(e.GetSourceKey()).SetTargetKey("input_1"))
 			}
 		default:
+			if srcInst == nil || dstInst == nil {
+				return nil, nil, nil, fmt.Errorf("edge %q has inconsistent component endpoint state", e.GetID())
+			}
 			// Instance → instance: connect the source instance's
 			// inner out-port srcNodes to the target instance's inner
 			// in-port srcNodes.

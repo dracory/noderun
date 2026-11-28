@@ -327,7 +327,7 @@ func (e *WorkflowEngine) deployWorkflow(ctx context.Context, workflow nodestore.
 		}
 		return id, nil
 	case <-time.After(deployTimeout):
-		return "", fmt.Errorf("workflow %s activation timed out", workflow.GetID())
+		return "", fmt.Errorf("workflow %s activation timed out", id)
 	}
 }
 
@@ -364,6 +364,9 @@ func (e *WorkflowEngine) pauseLock(workflowID string) *sync.Mutex {
 // stay live, only dirty node IDs are activated, and per-node state and
 // statuses survive for untouched nodebase.
 func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.WorkflowInterface, input nodestore.MessageInterface, mode DeployMode) (string, <-chan error, error) {
+	if workflow == nil {
+		return "", nil, errors.New("cannot run a nil workflow")
+	}
 	// Expand component instances into namespaced internal node copies
 	// before the run registers — the stored flow, statuses and node
 	// lookups all operate on the expanded graph. The expansion runs
@@ -417,6 +420,7 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 	gen := e.runGen[workflow.GetID()]
 	oldCancel := e.running[workflow.GetID()]
 	oldFlow := e.flows[workflow.GetID()]
+	oldRunCtx := e.runCtx[workflow.GetID()]
 
 	// activateOnly restricts which stopper nodes the activation pass
 	// (re)starts — nil means all of them (full deploy / cold start).
@@ -450,7 +454,7 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 			delete(e.states[workflow.GetID()], nodeID)
 			delete(e.journal[workflow.GetID()], nodeID)
 		}
-		if len(kept) > 0 && e.runCtx[workflow.GetID()] != nil {
+		if len(kept) > 0 && oldRunCtx != nil {
 			keepCtx = true
 		}
 	} else {
@@ -467,9 +471,9 @@ func (e *WorkflowEngine) startRun(ctx context.Context, workflow nodestore.Workfl
 	// can attribute side effects to this workflow — the nodebase.NodeFactory
 	// signature carries no workflow parameter.
 	ctx = ContextWithWorkflowID(ctx, workflow.GetID())
-	if keepCtx {
+	if keepCtx && oldRunCtx != nil {
 		cancel() // discard the fresh context; the old one stays in use
-		ctx = e.runCtx[workflow.GetID()]
+		ctx = oldRunCtx
 	} else {
 		e.running[workflow.GetID()] = cancel
 		e.runCtx[workflow.GetID()] = ctx
@@ -725,6 +729,9 @@ func (e *WorkflowEngine) executeWorkflow(ctx context.Context, workflow nodestore
 
 	for _, node := range order {
 		executor := executors[node.GetID()]
+		if executor == nil {
+			continue
+		}
 
 		// Only activatable nodes run on deploy; the rest wait for
 		// messages injected by triggers.
@@ -937,6 +944,9 @@ type injectFirer interface {
 // downstream traversal. ports filters which outgoing edges of
 // fromNodeID seed the traversal — nil means every outgoing edge.
 func (e *WorkflowEngine) inject(workflowID, fromNodeID string, payload nodestore.MessageInterface, ports []string) (string, chan nodestore.MessageInterface, error) {
+	if payload == nil {
+		return "", nil, fmt.Errorf("workflow %q: cannot inject a nil message", workflowID)
+	}
 	pauseMu := e.pauseLock(workflowID)
 	pauseMu.Lock()
 	e.runMu.Lock()
@@ -1040,6 +1050,9 @@ func (e *WorkflowEngine) inflightDone() {
 // ports restricts which outgoing edges of fromNodeID are seeded
 // (nil = all edges); checkpoint route releases pass a single port.
 func (e *WorkflowEngine) DeliverSync(workflowID, fromNodeID string, payload nodestore.MessageInterface, ports []string) error {
+	if payload == nil {
+		return fmt.Errorf("workflow %q: cannot deliver a nil message", workflowID)
+	}
 	pauseMu := e.pauseLock(workflowID)
 	pauseMu.Lock()
 	e.runMu.Lock()

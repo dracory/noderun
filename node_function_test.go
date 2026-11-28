@@ -309,6 +309,7 @@ func TestFunctionNodeSandboxIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("typeof probe failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	m, ok := out.GetPayload().(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected map payload, got %#v", out.GetPayload())
@@ -333,6 +334,7 @@ func TestFunctionNodeSandboxIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("global probe failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	m = out.GetPayload().(map[string]interface{})
 	if m["global"] != "object" || m["proc"] != "undefined" ||
 		m["set"] != "function" || m["get"] != "function" {
@@ -364,6 +366,7 @@ func TestFunctionNodeSandboxIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("env.get probe failed: %v", err)
 	}
+	out = requireNonNilMessage(t, out)
 	if out.GetPayload() != "probe-ok" {
 		t.Fatalf("env.get returned %#v, want probe-ok", out.GetPayload())
 	}

@@ -81,9 +81,7 @@ func TestHTTPTriggerFlow(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err != nil {
-		t.Fatalf("trigger listener never came up: %v", err)
-	}
+	resp = requireHTTPResponse(t, resp, err)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -147,9 +145,7 @@ func TestHTTPResponseStatusAndHeaders(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err != nil {
-		t.Fatalf("trigger listener never came up: %v", err)
-	}
+	resp = requireHTTPResponse(t, resp, err)
 	defer resp.Body.Close()
 
 	// nodestore.MessageInterface-level statusCode must override the node's config (201)
@@ -205,9 +201,7 @@ func TestHTTPResponseConfigFallback(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err != nil {
-		t.Fatalf("trigger listener never came up: %v", err)
-	}
+	resp = requireHTTPResponse(t, resp, err)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusAccepted {

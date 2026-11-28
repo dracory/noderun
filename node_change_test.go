@@ -16,6 +16,7 @@ func TestChangeMovePayloadIntoField(t *testing.T) {
 	out, _ := n.Execute(context.Background(), &Message{
 		Payload: map[string]interface{}{"a": float64(1)},
 	})
+	out = requireNonNilMessage(t, out)
 	if _, err := json.Marshal(out.GetPayload()); err != nil {
 		t.Fatalf("output must be JSON-safe (no cycles): %v", err)
 	}
@@ -38,6 +39,7 @@ func TestChangeMovePayloadToMsg(t *testing.T) {
 	out, _ := n.Execute(context.Background(), &Message{
 		Payload: map[string]interface{}{"a": float64(1)},
 	})
+	out = requireNonNilMessage(t, out)
 	if out.GetPayload() != nil {
 		t.Fatalf("expected cleared payload, got %v", out.GetPayload())
 	}
@@ -55,6 +57,7 @@ func TestChangeMovePayloadToPayloadNoop(t *testing.T) {
 	}})
 	in := &Message{Payload: map[string]interface{}{"a": float64(1)}}
 	out, _ := n.Execute(context.Background(), in)
+	out = requireNonNilMessage(t, out)
 	if m := out.GetPayload().(map[string]interface{}); m["a"] != float64(1) {
 		t.Fatalf("expected unchanged payload, got %v", out.GetPayload())
 	}

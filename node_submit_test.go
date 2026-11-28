@@ -225,7 +225,13 @@ func TestSubmitAuth(t *testing.T) {
 
 	// Authenticated -> 200 and submittedBy stamped
 	body, ct = multipartBody(t, "job.bin", "application/octet-stream", []byte("bin"))
-	req, _ := http.NewRequest("POST", url, body)
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		t.Fatalf("new request failed: %v", err)
+	}
+	if req == nil {
+		t.Fatal("new request returned nil")
+	}
 	req.Header.Set("Content-Type", ct)
 	req.SetBasicAuth("alice", "s3cret")
 	resp, err = http.DefaultClient.Do(req)

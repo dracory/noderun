@@ -2,17 +2,38 @@ package noderunner_test
 
 import (
 	"fmt"
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/dracory/nodebase"
 	_ "github.com/dracory/nodebase/builtin"
 	. "github.com/dracory/noderun"
 	nodestore "github.com/dracory/nodestore"
-	"testing"
-	"time"
 )
 
 // Test helpers ported from flowrunner's node_queue_test.go and
 // node_link_test.go (they are used by the ported engine/queue/component
 // test files).
+
+func requireHTTPResponse(t *testing.T, resp *http.Response, err error) *http.Response {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("HTTP request failed: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("HTTP request returned a nil response")
+	}
+	return resp
+}
+
+func requireNonNilMessage(t *testing.T, msg nodestore.MessageInterface) nodestore.MessageInterface {
+	t.Helper()
+	if msg == nil {
+		t.Fatal("expected a non-nil message")
+	}
+	return msg
+}
 
 // queueTestFlow builds inj -> queue -> dbg. The queue node carries
 // the given Data (name/hold/capacity/policy); dbg is a debug node whose

@@ -21,7 +21,7 @@ func runFunctionIn(t *testing.T, engine *Engine, workflowID, nodeID, script stri
 	if err != nil {
 		t.Fatalf("script %q failed: %v", script, err)
 	}
-	return out
+	return requireNonNilMessage(t, out)
 }
 
 // TestContextScopeIsolation proves Node-RED scoping: two workflows
